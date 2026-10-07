@@ -141,3 +141,72 @@ then name. Invite codes are 10 chars from `[a-z0-9]`, generated server-side.
   sheet), Leave (member) or Manage members (host: list with Remove; confirm
   each). The board refreshes when the screen opens and after each sync.
 - Home rows show a small group badge on grouped tasks.
+
+## Slice A: flames, milestones, multi-event tasks, gems, freezes, shoutouts, friend streaks
+
+All free; gems are earned only (no Play billing involved).
+
+### Model changes
+
+- `Task.target` (int, default 1): events per day. A task with `target > 1` is
+  "multi-event". A day **counts** (is `on`) when `n >= ceil(0.7 * target)`.
+- `Entry.n` (int, default 1 when `on`, 0 when off): events logged that day.
+  `Entry.on` stays the stored, synced truth for "counts toward streak"; the client
+  sets it from `n` and `target`. `Entry.kind`: 0 normal, 1 **freeze** (a missed
+  day covered by a banked freeze), 2 **repair** (a missed day filled with gems).
+  Kinds 1 and 2 keep a streak alive but do **not** count toward month/year/total.
+- `Wallet` per user: `{ gems, freezes, milestones: string[], updated }`.
+  `milestones` holds awarded keys `"<taskId>:<n>"` so awards happen once.
+  Client-authoritative, merged by `updated` (newest wins) through `/sync`.
+- D1: `tasks.target INTEGER NOT NULL DEFAULT 1`; `entries.n INTEGER NOT NULL
+  DEFAULT 1`, `entries.kind INTEGER NOT NULL DEFAULT 0`; `users.gems`,
+  `users.freezes`, `users.milestones TEXT (JSON)`, `users.wallet_updated`.
+  New table `shoutouts(group_id, from_id, to_id, day, PRIMARY KEY(group_id, from_id, to_id, day))`.
+  Apply as `ALTER TABLE ... ADD COLUMN` statements in `db/migrations/002_slice_a.sql`
+  (idempotent: guard with a check of `pragma_table_info`), plus `CREATE TABLE IF NOT EXISTS`.
+
+### Rules (client computes; server stores and relays)
+
+- **Streak tiers** for the flame border: 7+ ember, 30+ flame, 100+ blue, 365+ gold.
+- **Milestones**: when marking today lifts a task's streak to exactly 7, 30, 100
+  or 365, or sets a new best streak of 7 or more: play the milestone animation,
+  award gems once per key (`7:10`, `30:50`, `100:200`, `365:500`; new-best: 5),
+  and at 14-day multiples of streak bank one freeze (cap 2).
+- **Freeze (auto)**: on load/sync, for each task with an active streak that ended
+  exactly one day before yesterday (i.e. yesterday is missing and the day before
+  is on), if `wallet.freezes > 0`: write yesterday as `{on:1, n:0, kind:1}` and
+  decrement freezes. Only yesterday is ever auto-frozen, and only once.
+- **Repair (manual)**: on the month calendar, a missed day within the last 7 days
+  can be repaired for 100 gems → `{on:1, n:0, kind:2}`. Confirm sheet shows the cost.
+- **Shoutouts**: a member can send one shoutout per day to each other member of a
+  group. `POST /groups/:id/shout { userId }` → `{ ok, count }`; 409 if already sent
+  today. The board returns per member `shouts` (received in the last 7 days) and
+  `shoutedToday` (whether the caller already sent one today).
+- **Friend streak**: for the caller and each other member, the number of
+  consecutive days (ending today or yesterday) on which **both** members' tasks
+  in that group were `on`. Returned on the board as `friend` per member.
+  Computed server-side from entries.
+
+### Routes
+
+| Route | Body | Returns |
+|---|---|---|
+| `POST /sync` | adds `wallet?: Wallet` to the request | adds `wallet: Wallet` to the response; tasks carry `target`, entries carry `n`, `kind` |
+| `POST /groups/:id/shout` | `{ userId }` | `{ ok: true, count }` or 409 `already today` |
+| `GET /groups/:id/board` | unchanged | `Member` gains `shouts: number`, `shoutedToday: boolean`, `friend: number`; `today` is still the client's date |
+
+### App
+
+- Add/Edit task: "Times per day" stepper (1–20). Multi-event rows show `n/target`
+  and the home check button increments `n` (long-press or the task screen's
+  "−" to decrement); the square fills proportionally (`n/target`), full and lit
+  once it counts.
+- Flame border on list rows and the task screen's today button by tier
+  (CSS classes `flame-1..4`, animated subtly, respects reduced motion).
+- Milestone overlay: full-screen, ≤ 1.2 s, task color, "7 days", gem award line.
+- Gems + freezes shown in Settings ("Wallet") and as a small pill on the task
+  screen; freeze bank shown as ❄×n. Repaired/frozen days show a ❄ in the month
+  calendar and a lighter square on the year grid.
+- Leaderboard rows: 🔥 button (disabled after use today) with the received count;
+  "🤝 N" friend streak next to the name when N > 0.
+- Mock API implements all of it (including shout/friend/board fields).
