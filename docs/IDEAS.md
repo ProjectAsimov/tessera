@@ -123,3 +123,28 @@ blogs rather than papers.
   Prefer group size, cosmetics and coaching as the paid levers (see Guardrails).
 - Earned-only gems keep us out of Play billing entirely until we choose to sell
   anything, so the gem system can ship free of payment plumbing.
+
+## From Theo (2026-10-07)
+
+- **Rename the app.** "TaskTracker" is generic (and hard to find in a store search).
+  Decide before the first Play upload; the package id is permanent after that.
+- **Watch compatibility** (Wear OS tile/complication: today's checks, tap to mark).
+  Needs a native layer; not possible from the TWA alone.
+- **Badges/achievements:** perfect week, perfect month (per task). Cheap; pairs
+  with milestones.
+- **Year view, multi-event tasks: fill by gradient** (partial day = partial fill).
+  Slice A already fills squares proportionally; make it a gradient rather than a
+  hard edge.
+- **Widgets** (home-screen: today's checks). Native layer again; same work as watch.
+- **Year in review** with a share icon (shareable image of the year grid + stats).
+- **Mascot: snow leopard?** (Fits streaks/freezes: cold-climate, solitary, rare.)
+- **Gems need a real name** and should look like a small variant of the lit
+  year-grid square rather than a generic gem icon.
+
+### Claude's notes on these
+- Native layer (widgets + watch) is one project: a thin Android app that embeds
+  the TWA and adds a widget + Wear tile reading the same data via the worker.
+  Worth doing after the store listing exists, not before.
+- Currency name candidates that are literally "a small square": **tiles**,
+  **pips**, **chips**, **bits**, **tessera/tesserae**. "Tiles" is the plainest.
+- Mascot can carry the freeze mechanic ("the leopard saved your streak").
