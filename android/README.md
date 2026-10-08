@@ -111,3 +111,13 @@ from the old `/tasktracker/` URLs in memory only, then make sure `app/build.grad
 Play automatic protection rejects bundles with a minimum SDK below 24. If the project is
 regenerated, confirm `app/build.gradle` still says `minSdkVersion 24` and reapply the two
 `/tessera/` hand fixes described above.
+
+## Build 2 (1.1.0, versionCode 2): notifications
+
+`enableNotifications` is now `true`, so Bubblewrap emits the `POST_NOTIFICATIONS`
+uses-permission and the `DelegationService` (enabled via the `enableNotification` bool).
+Artifacts: `dist\tessera-1.1.0.apk` / `.aab` (the 1.0.0 files are kept). Once the live
+`/tessera/` site existed, the project was regenerated straight from `twa-manifest.json`
+(no more in-memory /tasktracker/ override), so `web_app_manifest.json` and the
+`webManifestUrl` resValue come out with `/tessera/` without hand edits. A running Gradle
+daemon can lock `app/build`; stop any java process under `.bubblewrap` before regenerating.

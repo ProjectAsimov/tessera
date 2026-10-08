@@ -1,4 +1,5 @@
 import { HttpError } from './json';
+import { b64urlToBytes } from './crypto';
 import type { Entry, Task, Wallet } from '../types';
 
 export const MAX_TASKS = 200;
@@ -124,4 +125,87 @@ export function validateReason(v: unknown): string {
   const r = v.trim();
   if (r.length < 1 || r.length > MAX_REASON) throw new HttpError(400, `reason must be 1-${MAX_REASON} characters`);
   return r;
+}
+
+// --- push (Slice C) ---
+
+export interface PushSubscribeBody {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  tz: string;
+  reminderHour: number | null;
+  weekly: 0 | 1;
+}
+
+const B64URL = /^[A-Za-z0-9_-]+$/;
+
+function b64urlBytes(v: unknown): Uint8Array | null {
+  if (typeof v !== 'string' || !B64URL.test(v)) return null;
+  try { return b64urlToBytes(v); } catch { return null; }
+}
+
+/** https only (http too when `allowHttp`, for a local stub push service). */
+export function validatePushEndpoint(v: unknown, allowHttp: boolean): string {
+  if (typeof v !== 'string' || v.length < 1 || v.length > 2048) throw new HttpError(400, 'endpoint invalid');
+  let u: URL;
+  try { u = new URL(v); } catch { throw new HttpError(400, 'endpoint invalid'); }
+  if (u.protocol !== 'https:' && !(allowHttp && u.protocol === 'http:')) throw new HttpError(400, 'endpoint invalid');
+  if (u.username || u.password) throw new HttpError(400, 'endpoint invalid');
+  return v;
+}
+
+/** An IANA zone name the runtime accepts, e.g. `America/Chicago`. */
+export function validateTimeZone(v: unknown): string {
+  if (typeof v !== 'string' || v.length < 1 || v.length > 64) throw new HttpError(400, 'tz invalid');
+  try { new Intl.DateTimeFormat('en-US', { timeZone: v }); } catch { throw new HttpError(400, 'tz invalid'); }
+  return v;
+}
+
+export function validateReminderHour(v: unknown): number | null {
+  if (v === null) return null;
+  if (!isInt(v, 0, 23)) throw new HttpError(400, 'reminderHour invalid');
+  return v;
+}
+
+function validateWeekly(v: unknown): 0 | 1 {
+  if (typeof v !== 'boolean' && v !== 0 && v !== 1) throw new HttpError(400, 'weekly invalid');
+  return flag(v);
+}
+
+export function validatePushSubscribe(body: unknown, allowHttp: boolean): PushSubscribeBody {
+  if (!isObject(body)) throw new HttpError(400, 'body must be an object');
+  const sub = body.subscription;
+  if (!isObject(sub)) throw new HttpError(400, 'subscription invalid');
+  const endpoint = validatePushEndpoint(sub.endpoint, allowHttp);
+  if (!isObject(sub.keys)) throw new HttpError(400, 'keys invalid');
+  const p256dh = b64urlBytes(sub.keys.p256dh);
+  if (!p256dh || p256dh.length !== 65 || p256dh[0] !== 4) throw new HttpError(400, 'p256dh invalid');
+  const auth = b64urlBytes(sub.keys.auth);
+  if (!auth || auth.length !== 16) throw new HttpError(400, 'auth invalid');
+  return {
+    endpoint,
+    p256dh: sub.keys.p256dh as string,
+    auth: sub.keys.auth as string,
+    tz: validateTimeZone(body.tz),
+    reminderHour: body.reminderHour === undefined ? null : validateReminderHour(body.reminderHour),
+    weekly: body.weekly === undefined ? 1 : validateWeekly(body.weekly),
+  };
+}
+
+export interface PushPrefsBody {
+  endpoint: string;
+  reminderHour?: number | null;
+  weekly?: 0 | 1;
+  tz?: string;
+}
+
+/** Fields left out of a prefs body stay unchanged. */
+export function validatePushPrefs(body: unknown, allowHttp: boolean): PushPrefsBody {
+  if (!isObject(body)) throw new HttpError(400, 'body must be an object');
+  const out: PushPrefsBody = { endpoint: validatePushEndpoint(body.endpoint, allowHttp) };
+  if (body.reminderHour !== undefined) out.reminderHour = validateReminderHour(body.reminderHour);
+  if (body.weekly !== undefined) out.weekly = validateWeekly(body.weekly);
+  if (body.tz !== undefined) out.tz = validateTimeZone(body.tz);
+  return out;
 }

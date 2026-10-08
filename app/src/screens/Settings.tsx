@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Sheet } from '../components/Sheet';
-import { Button, GoogleButton } from '../components/Button';
+import { Button, GoogleButton, LinkButton } from '../components/Button';
 import { Segmented } from '../components/Segmented';
 import { Swatches } from '../components/Swatches';
 import { mode, setMode, accent, setAccent, type Mode } from '../lib/theme';
@@ -13,12 +13,95 @@ import { MOCK } from '../model/api';
 import { closeSheet, openSheet, sheet } from '../lib/nav';
 import { GUIDELINES_URL, PRIVACY_URL } from '../components/Terms';
 import { deleteAccount } from '../model/account';
+import { available, enable, disable, updatePrefs, sendTest, pushState, permissionState, refreshPermission, DEFAULT_HOUR, type PushPrefs } from '../model/push';
+import { toast } from '../components/Toast';
 import './Settings.css';
 
 const MODES: ReadonlyArray<{ value: Mode; label: string }> = [
   { value: 'auto', label: 'Auto' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' },
 ];
 const ON_OFF = [{ value: '1', label: 'On' }, { value: '0', label: 'Off' }] as const;
+
+function hourLabel(h: number): string {
+  return new Date(2000, 0, 1, h).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
+
+function NotificationsSection() {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const st = pushState.value;
+  const perm = permissionState.value;
+  const blocked = perm === 'denied';
+  const reminderOn = !!st && st.reminderHour !== null;
+  const weeklyOn = !!st && st.weekly;
+
+  const apply = async (next: PushPrefs) => {
+    if (busy) return;
+    setBusy(true);
+    setErr('');
+    const none = next.reminderHour === null && !next.weekly;
+    if (!st) {
+      if (!none) {
+        const r = await enable(next);
+        if (r === 'denied') setErr('Blocked in system settings. Allow notifications for Tessera there, then try again.');
+        else if (r !== 'ok') setErr('Could not turn notifications on. Check your connection and try again.');
+      }
+    } else if (none) {
+      await disable();
+    } else if (!(await updatePrefs(next))) {
+      setErr('Could not save that. Check your connection and try again.');
+    }
+    refreshPermission();
+    setBusy(false);
+  };
+  const test = async () => {
+    if (busy) return;
+    setBusy(true);
+    const ok = await sendTest();
+    setBusy(false);
+    toast(ok ? 'Test sent' : 'Could not send the test');
+  };
+
+  const status = blocked
+    ? 'Blocked in system settings. Allow notifications for Tessera there to use these.'
+    : st
+      ? `On for this device${reminderOn ? `: daily at ${hourLabel(st.reminderHour as number)}` : ''}${weeklyOn ? `${reminderOn ? ', ' : ': '}weekly recap on Sundays` : ''}.`
+      : 'Off. Turning one on asks this device for permission.';
+
+  return (
+    <>
+      <p class="sheet-label">Notifications</p>
+      <p class="acct" id="pushDaily">Daily reminder</p>
+      <Segmented
+        options={ON_OFF}
+        value={reminderOn ? '1' : '0'}
+        label="Daily reminder"
+        onChange={(v) => { void apply({ reminderHour: v === '1' ? DEFAULT_HOUR : null, weekly: weeklyOn }); }}
+      />
+      {reminderOn && (
+        <select
+          class="field hour-pick"
+          aria-label="Reminder time"
+          value={String(st!.reminderHour)}
+          disabled={busy}
+          onChange={(e) => { void apply({ reminderHour: Number((e.currentTarget as HTMLSelectElement).value), weekly: weeklyOn }); }}
+        >
+          {HOURS.map((h) => <option key={h} value={h}>{hourLabel(h)}</option>)}
+        </select>
+      )}
+      <p class="acct" style={{ marginTop: 14 }}>Weekly recap</p>
+      <Segmented
+        options={ON_OFF}
+        value={weeklyOn ? '1' : '0'}
+        label="Weekly recap"
+        onChange={(v) => { void apply({ reminderHour: st ? st.reminderHour : null, weekly: v === '1' }); }}
+      />
+      <p class="acct" style={{ marginTop: 8 }} role="status">{err || status}</p>
+      {st && !blocked && <LinkButton disabled={busy} onClick={() => { void test(); }}>Send a test</LinkButton>}
+    </>
+  );
+}
 
 export function Settings({ open }: { open: boolean }) {
   const [io, setIo] = useState('');
@@ -30,6 +113,7 @@ export function Settings({ open }: { open: boolean }) {
 
   const doSignOut = () => {
     if (!confirm('Sign out on this device? Your days stay here and in your account.')) return;
+    void disable();
     signOut();
   };
   const showBackup = () => {
@@ -97,6 +181,8 @@ export function Settings({ open }: { open: boolean }) {
           </p>
         </>
       )}
+
+      {s && available() && <NotificationsSection />}
 
       <p class="sheet-label">Wallet</p>
       <div class="wallet-row">

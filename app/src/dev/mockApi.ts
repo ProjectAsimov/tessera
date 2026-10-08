@@ -15,6 +15,14 @@ const serverEntries = new Map<string, Entry>(); // "taskId|day"
 let sessions = new Set<string>([MOCK_TOKEN]);
 let serverWallet: Wallet = { gems: 0, freezes: 0, milestones: [], updated: 0 };
 
+/** A well-formed uncompressed P-256 point (65 bytes, base64url) standing in for the VAPID public key. */
+const MOCK_VAPID_KEY = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
+/** Pushes the page made, on window.__pushLog, so scripts can assert on them. */
+function logPush(kind: string, body: unknown): void {
+  const w = window as unknown as { __pushLog?: Array<{ kind: string; body: unknown }> };
+  (w.__pushLog ??= []).push({ kind, body });
+}
+
 function delay(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)); }
 
 function auth(token: string): void {
@@ -384,5 +392,31 @@ export const mockApi: Api = {
       const task = serverTasks.get(target.taskId);
       if (task) serverTasks.set(task.id, { ...task, groupId: undefined, updated: Date.now() });
     }
+  },
+
+  // Slice C: Web Push (all succeed; recorded on window.__pushLog).
+  async pushKey() {
+    await delay(60);
+    return { publicKey: MOCK_VAPID_KEY };
+  },
+  async pushSubscribe(token, body) {
+    await delay(120);
+    auth(token);
+    logPush('subscribe', body);
+  },
+  async pushPrefs(token, body) {
+    await delay(100);
+    auth(token);
+    logPush('prefs', body);
+  },
+  async pushUnsubscribe(token, endpoint) {
+    await delay(100);
+    auth(token);
+    logPush('unsubscribe', { endpoint });
+  },
+  async pushTest(token, endpoint) {
+    await delay(300);
+    auth(token);
+    logPush('test', { endpoint });
   },
 };

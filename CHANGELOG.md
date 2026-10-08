@@ -4,6 +4,25 @@ Web releases are dated (the PWA updates itself on next open). Android builds
 carry a version; the Android shell only wraps the web app, so most releases
 need no new bundle.
 
+## 2026-10-08 (b) — Notifications
+
+- Daily reminder: pick an hour in Settings → Notifications and get one nudge
+  listing what's still unmarked that day. Nothing is sent if you've already
+  done everything.
+- Weekly recap on Sunday evenings: days done this week across your tasks, how
+  that compares to last week, and your longest current streak.
+- "Send a test" to check it works on a device. Everything is opt-in and can be
+  turned off in the same place; turning both off removes the subscription.
+- Reminders follow your phone's time zone.
+
+Internal: Web Push from the Worker (RFC 8291/8292 with WebCrypto, no
+dependencies), VAPID keys, D1 migration 004 (`push_subs`), a 15-minute cron,
+push handlers in the service worker. Android build 2 (1.1.0) enables
+notification delegation so pushes appear as Tessera's own.
+
+**Play "What's new" (1.1.0):** Daily reminders and a Sunday recap, opt-in in
+Settings. Badges for perfect weeks and months, and a shareable year in review.
+
 ## 2026-10-08 — Badges and year in review
 
 - Perfect week (all seven days, Sunday to Saturday) and perfect month badges,

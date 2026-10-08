@@ -24,7 +24,7 @@ npx wrangler d1 execute tasktracker --remote --file src/db/schema.sql
 npx wrangler deploy
 ```
 
-Upgrading an existing database (runs migrations 002 and 003: Slice A columns and `shoutouts`, Slice A.1 `blocks` and `reports`; safe to re-run, skips what exists):
+Upgrading an existing database (runs migrations 002, 003 and 004: Slice A columns and `shoutouts`, Slice A.1 `blocks` and `reports`, Slice C `push_subs`; safe to re-run, skips what exists):
 
 ```
 node scripts/migrate.mjs --local
@@ -35,6 +35,59 @@ Fresh databases get everything from `schema.sql`.
 
 `npm run dev` runs it locally on http://localhost:8787 with a local KV and D1
 (apply the schema with `--local` first). `npm run typecheck` runs tsc.
+
+
+## Web Push (Slice C)
+
+Opt-in daily reminders and a weekly recap. A cron trigger (`*/15 * * * *`, see `wrangler.toml`) runs
+`scheduled()` -> `services/notify.ts`: for each subscription it works out the local time from the
+subscription's `tz` (via `Intl.DateTimeFormat`), then
+- **daily reminder**: local hour == `reminder_hour` and `last_reminder_day` != local date -> if the user has
+  non-archived, non-deleted tasks with no `on` entry for that local date, push "N tasks left today" (or
+  "<name> left today" for one). The day is stamped when the push is accepted, or when there was nothing to send;
+- **weekly recap**: Sunday at local 18:00 with `weekly = 1` and `last_weekly_day` != local date -> "This week: 11 days
+  across 3 tasks (last week 9). Longest streak: Gym, 23 days." (Mon-Sun, normal days only; frozen/repaired days
+  keep the streak but are not counted as done).
+
+Messages are encrypted per RFC 8291 (aes128gcm) and authenticated with VAPID (RFC 8292) in `src/lib/webpush.ts`
+(WebCrypto only, no dependency). A 404/410 from the push service deletes the subscription; any other failure
+adds 1 to `failures` and the subscription is deleted at 5. A success resets `failures`.
+
+VAPID keys: `node scripts/vapid.mjs` prints the public key (already in `wrangler.toml` as `VAPID_PUBLIC_KEY`) and
+writes the private key only to `C:\Users\User\.secrets\tasktracker\vapid-private.txt` (it refuses to overwrite).
+Deploying needs the secret (paste the file's contents) and the migration:
+
+```
+node scripts/migrate.mjs --remote
+npx wrangler secret put VAPID_PRIVATE_KEY
+npx wrangler deploy
+```
+
+| Route | Body | Returns |
+|---|---|---|
+| `GET /push/key` | – (no session) | `{ publicKey }` |
+| `POST /push/subscribe` | `{ subscription: { endpoint, keys: { p256dh, auth } }, tz, reminderHour: 0-23 \| null, weekly: bool }` — endpoint must be https, `p256dh` a 65-byte uncompressed P-256 point, `auth` 16 bytes (base64url), `tz` an IANA zone | `{ ok: true }` — upserts by endpoint (the caller takes it over) and resets `failures` |
+| `POST /push/prefs` | `{ endpoint, reminderHour?: 0-23 \| null, weekly?: bool, tz? }` — omitted fields stay as they are | `{ ok: true }`; 404 when the caller has no such subscription |
+| `POST /push/unsubscribe` | `{ endpoint }` | `{ ok: true }` — idempotent, only touches the caller's own subscription |
+| `POST /push/test` | `{ endpoint }` | `{ ok: true }` after sending "Notifications are on" to that endpoint; 429 on a second call within a minute (per user); 404 unknown endpoint; 502 if the push service refused it |
+
+`DELETE /me` also deletes the caller's subscriptions.
+
+### Testing Web Push locally
+
+```
+node scripts/migrate.mjs --local
+npx tsx tests/webpush.test.mjs        # RFC 8291 Appendix A known answer, VAPID JWT, request shape
+# worker with the private key from the secrets file, without echoing it:
+VK="$(cat /c/Users/User/.secrets/tasktracker/vapid-private.txt)"
+npx wrangler dev --port 8787 --test-scheduled --var DEV_PUSH_HTTP:1 --var DEV_NOW_OVERRIDE:1 --var "VAPID_PRIVATE_KEY:$VK"
+node tests/push.integration.mjs       # stub push service on :8799, plants pt-* rows in the local DB, cleans up
+```
+
+`DEV_PUSH_HTTP=1` lets `/push/subscribe` accept `http://` endpoints (the stub); `DEV_NOW_OVERRIDE=1` enables
+`GET /__notify?now=<ISO>` to run the notification pass at a chosen instant (wrangler's `/__scheduled?time=` does not
+change the clock inside the worker). Neither is set in `wrangler.toml`. Trigger the real cron path with
+`curl "http://127.0.0.1:8787/__scheduled?cron=*/15+*+*+*+*"`.
 
 ## API
 

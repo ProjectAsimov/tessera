@@ -7,6 +7,9 @@ compatibility_date = "2026-09-01"
 ALLOWED_ORIGINS = "https://projectasimov.github.io,http://localhost:8123"
 # Google OAuth web client id (public). Must match the one in the app.
 GOOGLE_CLIENT_ID = "712676467852-6giqqf5fg2viqsue21kad9jcbhg2st5m.apps.googleusercontent.com"
+# Web Push (Slice C). The private key is a secret: npx wrangler secret put VAPID_PRIVATE_KEY
+VAPID_PUBLIC_KEY = "BGgzpGxxbeTqF-zI60M9RY59SocPEjXeAbWFzMI4J-q4c3-amwNgPURjt6LasHueFa2r21wC3qRQ4ZYlSwS5QvY"
+VAPID_SUBJECT = "mailto:tasktracker.support@gmail.com"
 
 # Sessions, OAuth state and legacy single-tracker records.
 [[kv_namespaces]]
@@ -18,3 +21,7 @@ id = "656ff3bc34e8467d82f2c49e6209e34c"
 binding = "DB"
 database_name = "tasktracker"
 database_id = "ba35f393-3992-42f3-b198-95619871c7a0"
+
+# Sends the daily reminders and weekly recaps (src/services/notify.ts).
+[triggers]
+crons = ["*/15 * * * *"]

@@ -6,7 +6,9 @@ import { corsHeaders } from './middleware/cors';
 import { authCallback, authLogout, authStart } from './routes/auth';
 import { blockRoute, boardRoute, createGroupRoute, joinGroupRoute, leaveRoute, previewGroupRoute, removeRoute, reportRoute, shoutRoute, unblockRoute } from './routes/groups';
 import { deleteMe, me, myBlocks } from './routes/me';
+import { devNotify, pushKey, pushPrefs, pushSubscribe, pushTest, pushUnsubscribe } from './routes/push';
 import { sync } from './routes/sync';
+import { runNotifications } from './services/notify';
 import type { Ctx, Env, Handler } from './types';
 
 const routes: Record<string, Handler | undefined> = {
@@ -17,6 +19,12 @@ const routes: Record<string, Handler | undefined> = {
   'DELETE /me': deleteMe,
   'GET /me/blocks': myBlocks,
   'POST /sync': sync,
+  'GET /__notify': devNotify,
+  'GET /push/key': pushKey,
+  'POST /push/subscribe': pushSubscribe,
+  'POST /push/prefs': pushPrefs,
+  'POST /push/unsubscribe': pushUnsubscribe,
+  'POST /push/test': pushTest,
   'POST /groups': createGroupRoute,
   'GET /groups/preview': previewGroupRoute,
   'POST /groups/join': joinGroupRoute,
@@ -62,5 +70,10 @@ export default {
       console.error(e);
       return json({ error: 'server error' }, 500, cors);
     }
+  },
+
+  /** Cron (every 15 minutes): daily reminders and weekly recaps. */
+  async scheduled(controller, env): Promise<void> {
+    console.log('notify', new Date(controller.scheduledTime).toISOString(), JSON.stringify(await runNotifications(env, controller.scheduledTime)));
   },
 } satisfies ExportedHandler<Env>;

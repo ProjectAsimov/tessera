@@ -10,7 +10,7 @@
   "navigationDividerColor": "#0c0a12",
   "navigationDividerColorDark": "#0c0a12",
   "backgroundColor": "#0c0a12",
-  "enableNotifications": false,
+  "enableNotifications": true,
   "startUrl": "/tessera/",
   "iconUrl": "https://projectasimov.github.io/tessera/icon-512.png",
   "maskableIconUrl": "https://projectasimov.github.io/tessera/icon-maskable-512.png",
@@ -19,8 +19,8 @@
     "path": "C:\\Users\\User\\.secrets\\tasktracker\\android-upload.keystore",
     "alias": "upload"
   },
-  "appVersion": "1.0.0",
-  "appVersionCode": 1,
+  "appVersion": "1.1.0",
+  "appVersionCode": 2,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://projectasimov.github.io/tessera/manifest.webmanifest",
@@ -40,5 +40,5 @@
   "retainedBundles": [],
   "protocolHandlers": [],
   "shareTarget": {},
-  "appVersionName": "1.0.0"
+  "appVersionName": "1.1.0"
 }

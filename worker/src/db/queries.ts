@@ -300,6 +300,119 @@ export function deleteAccountStmts(db: D1Database, userId: string, now: number):
     q('DELETE FROM groups WHERE host_id = ?1'),
     q('DELETE FROM entries WHERE task_id IN (SELECT id FROM tasks WHERE owner_id = ?1)'),
     q('DELETE FROM tasks WHERE owner_id = ?1'),
+    q('DELETE FROM push_subs WHERE user_id = ?1'),
     q('DELETE FROM users WHERE id = ?1'),
   ];
+}
+
+// --- push subscriptions (Slice C) ---
+
+export interface PushSub {
+  endpoint: string;
+  userId: string;
+  p256dh: string;
+  auth: string;
+  tz: string;
+  reminderHour: number | null;
+  weekly: 0 | 1;
+  lastReminderDay: string | null;
+  lastWeeklyDay: string | null;
+  created: number;
+  failures: number;
+}
+interface PushSubRow {
+  endpoint: string; user_id: string; p256dh: string; auth: string; tz: string; reminder_hour: number | null;
+  weekly: number; last_reminder_day: string | null; last_weekly_day: string | null; created: number; failures: number;
+}
+const pushSubFromRow = (r: PushSubRow): PushSub => ({
+  endpoint: r.endpoint, userId: r.user_id, p256dh: r.p256dh, auth: r.auth, tz: r.tz, reminderHour: r.reminder_hour,
+  weekly: r.weekly ? 1 : 0, lastReminderDay: r.last_reminder_day, lastWeeklyDay: r.last_weekly_day, created: r.created, failures: r.failures,
+});
+
+/** Insert or replace by endpoint (a browser that signs in as someone else takes the endpoint over). */
+export async function upsertPushSub(db: D1Database, s: Pick<PushSub, 'endpoint' | 'userId' | 'p256dh' | 'auth' | 'tz' | 'reminderHour' | 'weekly'>, now: number): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO push_subs (endpoint, user_id, p256dh, auth, tz, reminder_hour, weekly, created) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+       ON CONFLICT(endpoint) DO UPDATE SET user_id = ?2, p256dh = ?3, auth = ?4, tz = ?5, reminder_hour = ?6, weekly = ?7, failures = 0`,
+    )
+    .bind(s.endpoint, s.userId, s.p256dh, s.auth, s.tz, s.reminderHour, s.weekly, now)
+    .run();
+}
+
+export async function pushSubFor(db: D1Database, userId: string, endpoint: string): Promise<PushSub | null> {
+  const row = await db.prepare('SELECT * FROM push_subs WHERE endpoint = ?1 AND user_id = ?2').bind(endpoint, userId).first<PushSubRow>();
+  return row ? pushSubFromRow(row) : null;
+}
+
+/** Updates only the given fields; false when the caller has no such subscription. */
+export async function updatePushPrefs(db: D1Database, userId: string, endpoint: string, p: { reminderHour?: number | null; weekly?: 0 | 1; tz?: string }): Promise<boolean> {
+  const sets: string[] = [];
+  const vals: (string | number | null)[] = [];
+  if (p.reminderHour !== undefined) { sets.push('reminder_hour = ?'); vals.push(p.reminderHour); }
+  if (p.weekly !== undefined) { sets.push('weekly = ?'); vals.push(p.weekly); }
+  if (p.tz !== undefined) { sets.push('tz = ?'); vals.push(p.tz); }
+  if (sets.length === 0) return (await pushSubFor(db, userId, endpoint)) !== null;
+  const r = await db.prepare(`UPDATE push_subs SET ${sets.join(', ')} WHERE endpoint = ? AND user_id = ?`).bind(...vals, endpoint, userId).run();
+  return r.meta.changes > 0;
+}
+
+export async function deletePushSub(db: D1Database, endpoint: string, userId?: string): Promise<void> {
+  if (userId) await db.prepare('DELETE FROM push_subs WHERE endpoint = ?1 AND user_id = ?2').bind(endpoint, userId).run();
+  else await db.prepare('DELETE FROM push_subs WHERE endpoint = ?1').bind(endpoint).run();
+}
+
+/** Every subscription that wants a daily reminder or the weekly recap (the cron filters by local time). */
+export async function pushSubsDueCandidates(db: D1Database): Promise<PushSub[]> {
+  const { results } = await db.prepare('SELECT * FROM push_subs WHERE reminder_hour IS NOT NULL OR weekly = 1').all<PushSubRow>();
+  return results.map(pushSubFromRow);
+}
+
+/** Records a delivered push: clears the failure count and stamps the local day it covered. */
+export async function markPushOk(db: D1Database, endpoint: string, patch: { lastReminderDay?: string; lastWeeklyDay?: string } = {}): Promise<void> {
+  await db
+    .prepare('UPDATE push_subs SET failures = 0, last_reminder_day = COALESCE(?2, last_reminder_day), last_weekly_day = COALESCE(?3, last_weekly_day) WHERE endpoint = ?1')
+    .bind(endpoint, patch.lastReminderDay ?? null, patch.lastWeeklyDay ?? null)
+    .run();
+}
+
+/** Marks a local day as handled without sending anything (nothing to remind about). */
+export async function markPushDay(db: D1Database, endpoint: string, patch: { lastReminderDay?: string; lastWeeklyDay?: string }): Promise<void> {
+  await db
+    .prepare('UPDATE push_subs SET last_reminder_day = COALESCE(?2, last_reminder_day), last_weekly_day = COALESCE(?3, last_weekly_day) WHERE endpoint = ?1')
+    .bind(endpoint, patch.lastReminderDay ?? null, patch.lastWeeklyDay ?? null)
+    .run();
+}
+
+/** Counts a failed delivery; the subscription is dropped once it reaches `limit` failures. */
+export async function recordPushFailure(db: D1Database, endpoint: string, limit: number): Promise<void> {
+  await db.batch([
+    db.prepare('UPDATE push_subs SET failures = failures + 1 WHERE endpoint = ?1').bind(endpoint),
+    db.prepare('DELETE FROM push_subs WHERE endpoint = ?1 AND failures >= ?2').bind(endpoint, limit),
+  ]);
+}
+
+/** Live (non-archived, non-deleted) tasks of the user with no `on` entry for `day`. */
+export async function tasksNotDone(db: D1Database, userId: string, day: string): Promise<{ id: string; name: string }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT t.id, t.name FROM tasks t WHERE t.owner_id = ?1 AND t.archived = 0 AND t.deleted = 0
+         AND NOT EXISTS (SELECT 1 FROM entries e WHERE e.task_id = t.id AND e.day = ?2 AND e.on_ = 1)
+       ORDER BY t.created, t.id`,
+    )
+    .bind(userId, day)
+    .all<{ id: string; name: string }>();
+  return results;
+}
+
+/** `on` entries of the user's live tasks (all days; the recap needs full history for streaks). */
+export async function onEntriesForLiveTasks(db: D1Database, userId: string): Promise<{ taskId: string; name: string; day: string; kind: number }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT e.task_id AS taskId, t.name AS name, e.day AS day, e.kind AS kind FROM entries e JOIN tasks t ON t.id = e.task_id
+       WHERE t.owner_id = ?1 AND t.archived = 0 AND t.deleted = 0 AND e.on_ = 1`,
+    )
+    .bind(userId)
+    .all<{ taskId: string; name: string; day: string; kind: number }>();
+  return results;
 }

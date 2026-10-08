@@ -32,6 +32,7 @@ export default defineConfig({
         // Cache-first app shell: everything Vite emits is precached; navigations fall back to index.html.
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: '/tessera/index.html',
+        importScripts: ['push-sw.js'],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,

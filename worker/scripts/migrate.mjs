@@ -1,6 +1,6 @@
 // Idempotent D1 migration runner.
 //   node scripts/migrate.mjs --local | --remote [--persist-to <dir>] [--db <name>] [--file <sql>]
-// Runs each statement of the migration file(s) (default: 002, then 003), skipping `ALTER TABLE x ADD COLUMN y`
+// Runs each statement of the migration file(s) (default: 002, 003, then 004), skipping `ALTER TABLE x ADD COLUMN y`
 // when column y already exists (SQLite has no ADD COLUMN IF NOT EXISTS).
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
@@ -15,7 +15,7 @@ const local = args.includes('--local');
 const remote = args.includes('--remote');
 if (local === remote) { console.error('usage: node scripts/migrate.mjs --local|--remote [--persist-to dir] [--db name] [--file sql]'); process.exit(2); }
 const db = opt('--db') ?? 'tasktracker';
-const files = opt('--file') ? [resolve(root, opt('--file'))] : ['002_slice_a.sql', '003_slice_a1.sql'].map((f) => resolve(root, 'src/db/migrations', f));
+const files = opt('--file') ? [resolve(root, opt('--file'))] : ['002_slice_a.sql', '003_slice_a1.sql', '004_push.sql'].map((f) => resolve(root, 'src/db/migrations', f));
 const persist = opt('--persist-to');
 
 function wrangler(extra) {

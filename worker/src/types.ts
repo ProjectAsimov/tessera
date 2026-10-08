@@ -4,6 +4,14 @@ export interface Env {
   ALLOWED_ORIGINS: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
+  VAPID_PUBLIC_KEY: string;
+  /** Secret: base64url of the raw 32-byte P-256 private scalar. */
+  VAPID_PRIVATE_KEY: string;
+  VAPID_SUBJECT: string;
+  /** Local testing only: "1" lets /push/subscribe accept http:// endpoints (a stub push service). */
+  DEV_PUSH_HTTP?: string;
+  /** Local testing only: "1" enables GET /__notify?now=<ISO> (run the notification pass at a chosen time). */
+  DEV_NOW_OVERRIDE?: string;
 }
 
 /** What a session token resolves to in KV (`s:<sha256(token)>`). */
