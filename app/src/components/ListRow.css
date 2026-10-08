@@ -9,6 +9,10 @@
 .lrow-strip i { aspect-ratio: 1 / 1; border-radius: 2px; background: var(--cell); display: block; }
 .lrow-strip i.on { background: var(--lit); }
 .lrow-strip i.t { box-shadow: inset 0 0 0 1px var(--muted); }
+/* Multi-event days fill from the bottom by n/target; frozen / repaired days are lighter. */
+.lrow-strip i.p { background: linear-gradient(to top, var(--lit) calc(var(--fill, 0) * 100%), var(--cell) calc(var(--fill, 0) * 100%)); }
+.lrow-strip i.fz { background: var(--lit-soft); box-shadow: inset 0 0 0 1px var(--lit); }
+.lrow-count { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .lrow-today { width: 64px; flex: none; border: 0; border-radius: 14px; background: var(--btn); color: var(--btn-text); cursor: pointer; display: grid; place-items: center; transition: transform 0.12s ease; }
 .lrow-today:active { transform: scale(0.95); }
 .lrow-today:not(.done) { background: var(--bg); color: var(--muted); box-shadow: inset 0 0 0 1px var(--cell); }

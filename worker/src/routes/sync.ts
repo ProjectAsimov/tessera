@@ -1,4 +1,4 @@
-import { deleteMembershipStmt, entriesForOwner, existingTaskIds, tasksForOwner, upsertEntry, upsertTask, upsertUser } from '../db/queries';
+import { deleteMembershipStmt, entriesForOwner, existingTaskIds, setWalletStmt, tasksForOwner, upsertEntry, upsertTask, upsertUser, walletFor } from '../db/queries';
 import { HttpError, json, readJson } from '../lib/json';
 import { MAX_ENTRIES, MAX_TASKS, validateSyncBody } from '../lib/validate';
 import { requireSession } from '../middleware/auth';
@@ -63,8 +63,15 @@ export async function sync(ctx: Ctx): Promise<Response> {
   if (tasks.size > MAX_TASKS) throw new HttpError(413, 'too many tasks');
   if (entries.size > MAX_ENTRIES) throw new HttpError(413, 'too many entries');
 
+  // Wallet: client-authoritative, newest `updated` wins (the SQL guard repeats the rule).
+  let wallet = await walletFor(db, s.sub);
+  if (body.wallet && body.wallet.updated > wallet.updated) {
+    wallet = body.wallet;
+    writes.push(setWalletStmt(db, s.sub, wallet));
+  }
+
   if (writes.length > 1) await db.batch(writes);
   if (migration) await migration.finish();
 
-  return json({ tasks: [...tasks.values()], entries: [...entries.values()], now: Date.now() }, 200, ctx.cors);
+  return json({ tasks: [...tasks.values()], entries: [...entries.values()], wallet, now: Date.now() }, 200, ctx.cors);
 }

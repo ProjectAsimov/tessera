@@ -4,7 +4,7 @@
 import { HttpError, json } from './lib/json';
 import { corsHeaders } from './middleware/cors';
 import { authCallback, authLogout, authStart } from './routes/auth';
-import { boardRoute, createGroupRoute, joinGroupRoute, leaveRoute, previewGroupRoute, removeRoute } from './routes/groups';
+import { boardRoute, createGroupRoute, joinGroupRoute, leaveRoute, previewGroupRoute, removeRoute, shoutRoute } from './routes/groups';
 import { me } from './routes/me';
 import { sync } from './routes/sync';
 import type { Ctx, Env, Handler } from './types';
@@ -25,6 +25,7 @@ const groupIdRoutes: { method: string; suffix: string; handler: (ctx: Ctx, id: s
   { method: 'GET', suffix: '/board', handler: boardRoute },
   { method: 'POST', suffix: '/leave', handler: leaveRoute },
   { method: 'POST', suffix: '/remove', handler: removeRoute },
+  { method: 'POST', suffix: '/shout', handler: shoutRoute },
 ];
 
 function matchGroupIdRoute(method: string, pathname: string): { handler: (ctx: Ctx, id: string) => Promise<Response>; id: string } | null {

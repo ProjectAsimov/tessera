@@ -1,6 +1,6 @@
 import { useRef, useState } from 'preact/hooks';
 import { iso, MONTHS, todayIso } from '../lib/dates';
-import { countMonth } from '../lib/stats';
+import { countMonth, countedDays, onDays, type DayMap } from '../lib/stats';
 import { Card } from './Card';
 import { IconButton } from './Button';
 import './MonthCalendar.css';
@@ -8,7 +8,10 @@ import './MonthCalendar.css';
 interface Props {
   y: number;
   m: number;
-  days: Set<string>;
+  entries: DayMap | undefined;
+  /** A missed day that costs gems to fill (a gap in a streak, last 7 days). */
+  canRepair?: (day: string) => boolean;
+  onRepair?: (day: string) => void;
   onToggle: (day: string) => void;
   /** Sets every day in `list` to `on`; used by press-and-slide. Falls back to onToggle per day. */
   onSetDays?: (list: string[], on: boolean) => void;
@@ -29,8 +32,9 @@ function span(a: string, b: string): string[] {
   return out;
 }
 
-export function MonthCalendar({ y, m, days, onToggle, onSetDays, onPrev, onNext, doneWord = 'done' }: Props) {
+export function MonthCalendar({ y, m, entries, canRepair, onRepair, onToggle, onSetDays, onPrev, onNext, doneWord = 'done' }: Props) {
   const t = todayIso();
+  const days = onDays(entries);
   const now = new Date();
   const first = new Date(y, m, 1);
   const dim = new Date(y, m + 1, 0).getDate();
@@ -44,7 +48,7 @@ export function MonthCalendar({ y, m, days, onToggle, onSetDays, onPrev, onNext,
   const [range, setRange] = useState<{ list: string[]; on: boolean } | null>(null);
   const dayAt = (x: number, yy: number) => (document.elementFromPoint(x, yy)?.closest('[data-day]') as HTMLElement | null)?.dataset.day ?? null;
   const commit = (list: string[], on: boolean) => {
-    const eligible = list.filter((k) => k <= t);
+    const eligible = list.filter((k) => k <= t && !(on && canRepair?.(k)));
     if (onSetDays) onSetDays(eligible, on);
     else for (const k of eligible) if (days.has(k) !== on) onToggle(k);
   };
@@ -86,29 +90,35 @@ export function MonthCalendar({ y, m, days, onToggle, onSetDays, onPrev, onNext,
     const on = days.has(k);
     const future = k > t;
     const sel = !future && inRange.has(k);
+    const kind = on ? entries?.[k]?.kind ?? 0 : 0;
+    const repair = !on && !!canRepair?.(k);
     cells.push(
       <button
         type="button"
         key={k}
         data-day={k}
-        class={['c', on && 'on', k === t && 'today-cell', future && 'future', sel && (range!.on ? 'sel-on' : 'sel-off')].filter(Boolean).join(' ')}
+        class={['c', on && 'on', kind && 'fz', repair && 'rp', k === t && 'today-cell', future && 'future', sel && (range!.on ? 'sel-on' : 'sel-off')].filter(Boolean).join(' ')}
         disabled={future}
-        aria-label={`${MONTHS[m]} ${d}${on ? ', ' + doneWord : ''}`}
+        aria-label={`${MONTHS[m]} ${d}${on ? ', ' + (kind === 1 ? 'frozen' : kind === 2 ? 'repaired' : doneWord) : ''}${repair ? ', missed. Repair with gems' : ''}`}
         aria-pressed={on}
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onCancel}
-        onClick={() => { if (suppressClick.current) { suppressClick.current = false; return; } onToggle(k); }}
+        onClick={() => {
+          if (suppressClick.current) { suppressClick.current = false; return; }
+          if (repair && onRepair) onRepair(k); else onToggle(k);
+        }}
       >
         {d}
+        {kind > 0 && <span class="fzg" aria-hidden="true">❄</span>}
       </button>,
     );
   }
   return (
     <Card aria-label="Month calendar">
       <div class="cal-head">
-        <h2>{MONTHS[m]} {y} <span>{countMonth(days, y, m)} days</span></h2>
+        <h2>{MONTHS[m]} {y} <span>{countMonth(countedDays(entries), y, m)} days</span></h2>
         <div class="cal-nav">
           <IconButton icon="back" label="Previous month" onClick={onPrev} />
           <IconButton icon="next" label="Next month" onClick={onNext} disabled={isCurrent} />
@@ -118,7 +128,7 @@ export function MonthCalendar({ y, m, days, onToggle, onSetDays, onPrev, onNext,
         <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
       </div>
       <div class="cal">{cells}</div>
-      <p class="hint">Tap a day to mark or unmark it. Press and slide to do a whole stretch at once.</p>
+      <p class="hint">Tap a day to mark or unmark it. Press and slide to do a whole stretch at once. A missed day inside a streak can be repaired for gems.</p>
     </Card>
   );
 }

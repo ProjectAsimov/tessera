@@ -10,6 +10,8 @@
 .hg:last-child { margin-bottom: 0; }
 .hg i { aspect-ratio: 1 / 1; border-radius: 3px; background: var(--cell); display: block; }
 .hg i.on { background: var(--lit); }
+.hg i.p { background: linear-gradient(to top, var(--lit) calc(var(--fill, 0) * 100%), var(--cell) calc(var(--fill, 0) * 100%)); }
+.hg i.fz { background: var(--lit-soft); box-shadow: inset 0 0 0 1px var(--lit); }
 .hg i.f { background: transparent; box-shadow: inset 0 0 0 1px var(--cell); }
 .hg i.x { visibility: hidden; }
 .hg i.t { box-shadow: 0 0 0 1.5px var(--text); }

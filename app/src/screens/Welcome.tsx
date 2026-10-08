@@ -15,7 +15,7 @@ export function Welcome({ open }: { open: boolean }) {
   return (
     <Sheet open={open} onClose={skip} center labelledBy="welcomeTitle">
       <img src={import.meta.env.BASE_URL + 'icon.svg'} alt="" width={56} height={56} />
-      <h2 id="welcomeTitle">TaskTracker</h2>
+      <h2 id="welcomeTitle">Tessera</h2>
       {jp ? (
         <>
           <p>Sign in to join {jp.name}.</p>

@@ -1,7 +1,7 @@
 // Phase 2 (docs/ARCHITECTURE.md "groups and leaderboard"): sharing a task into
 // a group, joining by invite link, and the leaderboard board data.
 import { signal } from '@preact/signals';
-import { api } from './api';
+import { api, HttpError } from './api';
 import { session } from './session';
 import { sync } from './sync';
 import * as store from './store';
@@ -145,6 +145,22 @@ export async function removeGroupMember(groupId: string, userId: string): Promis
     toast('Could not remove that member. Try again.');
     return false;
   }
+}
+
+/** Leaderboard 🔥: one shoutout per member per day. Updates the row at once, then refreshes the board. */
+export async function shoutTo(groupId: string, userId: string): Promise<void> {
+  const s = session.value;
+  if (!s) return;
+  const b = board.value;
+  if (b) {
+    board.value = { ...b, members: b.members.map((m) => (m.userId === userId ? { ...m, shoutedToday: true, shouts: m.shouts + 1 } : m)) };
+  }
+  try {
+    await api.shout(s.token, groupId, userId);
+  } catch (e) {
+    toast(e instanceof HttpError && e.status === 409 ? 'You already sent one today.' : 'Could not send that. Try again.');
+  }
+  await loadBoard(groupId);
 }
 
 /** Wires the re-check that runs right after a sign-in completes. Call once on load. */

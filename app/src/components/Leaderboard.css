@@ -2,12 +2,17 @@
 .group-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .group-head h2 { font-size: 15px; margin: 0; }
 .group-head p { font-size: 12px; color: var(--muted); margin: 0; }
-.group-cols { display: grid; grid-template-columns: 22px 1fr 44px 44px 44px; gap: 6px; padding: 0 4px; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.group-cols { display: grid; grid-template-columns: 22px minmax(0, 1fr) 36px 36px 36px 50px; gap: 4px; padding: 0 4px; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0; }
 .group-cols span:not(:first-child) { text-align: center; }
 .group-list { list-style: none; margin: 4px 0 12px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.group-list li { display: grid; grid-template-columns: 22px 1fr 44px 44px 44px; align-items: center; gap: 6px; padding: 7px 4px; border-radius: 10px; }
+.group-list li { display: grid; grid-template-columns: 22px minmax(0, 1fr) 36px 36px 36px 50px; align-items: center; gap: 4px; padding: 7px 4px; border-radius: 10px; }
 .group-list li.me { background: var(--lit-soft); }
 .gpos { font-size: 12px; color: var(--muted); font-weight: 700; text-align: center; }
-.gname { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.gname { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 5px; min-width: 0; }
+.gn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.gfriend { font-size: 11px; font-weight: 600; color: var(--muted); flex: none; white-space: nowrap; }
 .gtag { font-size: 10px; font-weight: 700; color: var(--btn-text); background: var(--lit); border-radius: 999px; padding: 1px 6px; flex: none; text-transform: uppercase; letter-spacing: 0.02em; }
 .gstat { font-size: 13px; font-weight: 600; text-align: center; }
+.gshout { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; padding: 5px 0; border-radius: 999px; border: 1px solid var(--cell); background: var(--bg); color: var(--text); cursor: pointer; white-space: nowrap; }
+.gshout.sent, .gshout:disabled { background: var(--lit-soft); border-color: var(--lit); color: var(--text); cursor: default; opacity: 1; }
+.gshout.me { border-color: transparent; background: transparent; color: var(--muted); text-align: center; }

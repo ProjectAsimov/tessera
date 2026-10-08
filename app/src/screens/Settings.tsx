@@ -6,10 +6,12 @@ import { Swatches } from '../components/Swatches';
 import { mode, setMode, accent, setAccent, type Mode } from '../lib/theme';
 import { session, syncOn, setSyncOn, signIn, signOut } from '../model/session';
 import { sync } from '../model/sync';
-import { exportBackup, importBackup, eraseAll, tasks } from '../model/store';
+import { exportBackup, importBackup, eraseAll, tasks, wallet } from '../model/store';
+import { REPAIR_COST } from '../model/rewards';
 import { showArchived, setShowArchived } from '../lib/prefs';
 import { MOCK } from '../model/api';
 import { closeSheet } from '../lib/nav';
+import './Settings.css';
 
 const MODES: ReadonlyArray<{ value: Mode; label: string }> = [
   { value: 'auto', label: 'Auto' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' },
@@ -77,6 +79,15 @@ export function Settings({ open }: { open: boolean }) {
           </p>
         </>
       )}
+
+      <p class="sheet-label">Wallet</p>
+      <div class="wallet-row">
+        <span class="wallet-chip"><b>{'💎'} {wallet.value.gems}</b> gems</span>
+        <span class="wallet-chip"><b>{'❄'}×{wallet.value.freezes}</b> streak freezes</span>
+      </div>
+      <p class="acct" style={{ marginTop: 8 }}>
+        Gems are earned by reaching a streak of 7, 30, 100 or 365 days, and by setting a new best streak of 7 or more. Every 14 days of a streak banks a streak freeze (up to 2). A freeze covers yesterday for you if you missed it. A gem repair ({REPAIR_COST} gems) fills a missed day inside a streak, from a task's month view.
+      </p>
 
       <p class="sheet-label">Mode</p>
       <Segmented options={MODES} value={mode.value} label="Mode" onChange={setMode} />

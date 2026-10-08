@@ -21,12 +21,14 @@ export function TaskForm({ open, taskId }: Props) {
   const [color, setColor] = useState<ColorId>('purple');
   const [icon, setIcon] = useState<IconId>('check');
   const [touched, setTouched] = useState(false);
+  const [target, setTarget] = useState(1);
 
   useEffect(() => {
     if (!open) return;
     setName(existing?.name ?? '');
     setColor(existing?.color ?? accent.value);
     setIcon(existing?.icon ?? 'check');
+    setTarget(existing?.target ?? 1);
     setTouched(false);
   }, [open, taskId]);
 
@@ -37,8 +39,8 @@ export function TaskForm({ open, taskId }: Props) {
     e.preventDefault();
     setTouched(true);
     if (!valid) return;
-    if (existing) updateTask(existing.id, { name: trimmed, color, icon });
-    else addTask(trimmed, color, icon);
+    if (existing) updateTask(existing.id, { name: trimmed, color, icon, target });
+    else addTask(trimmed, color, icon, { target });
     closeSheet();
   };
 
@@ -62,6 +64,13 @@ export function TaskForm({ open, taskId }: Props) {
         <Swatches value={color} onChange={setColor} />
         <p class="sheet-label">Icon</p>
         <IconPicker value={icon} onChange={setIcon} />
+        <p class="sheet-label">Times per day</p>
+        <div class="stepper" role="group" aria-label="Times per day">
+          <button type="button" class="b" aria-label="Fewer times per day" disabled={target <= 1} onClick={() => setTarget((v) => Math.max(1, v - 1))}>&minus;</button>
+          <output aria-live="polite">{target}</output>
+          <button type="button" class="b" aria-label="More times per day" disabled={target >= 20} onClick={() => setTarget((v) => Math.min(20, v + 1))}>+</button>
+        </div>
+        <p class="note">{target > 1 ? `A day counts once you log ${Math.ceil(0.7 * target)} of ${target}.` : 'Once a day. Raise it for things you do several times.'}</p>
         <div class="row form-actions">
           <Button primary type="submit" disabled={!valid}>{existing ? 'Save' : 'Add task'}</Button>
         </div>

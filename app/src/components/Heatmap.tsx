@@ -1,5 +1,5 @@
 import { iso, addDays, MONTHS, shortMonth, todayIso } from '../lib/dates';
-import { countMonth, countYear } from '../lib/stats';
+import { countMonth, countYear, countedDays, fillOf, type DayMap } from '../lib/stats';
 import { Card } from './Card';
 import './Heatmap.css';
 
@@ -7,12 +7,15 @@ const HEAT_ROWS = 2;
 
 interface Props {
   year: number;
-  days: Set<string>;
+  entries: DayMap | undefined;
+  /** Events per day; squares fill by n/target for multi-event tasks. */
+  target: number;
   onOpenMonth: (y: number, m: number) => void;
 }
 
 /** One year, every day as a read-only square, weeks as columns, wrapped into two rows. */
-export function Heatmap({ year: y, days, onOpenMonth }: Props) {
+export function Heatmap({ year: y, entries, target, onOpenMonth }: Props) {
+  const days = countedDays(entries); // freeze / repair days keep a streak but do not count here
   const t = todayIso();
   const now = new Date();
   const total = countYear(days, y);
@@ -51,14 +54,18 @@ export function Heatmap({ year: y, days, onOpenMonth }: Props) {
       const cur = addDays(start, i);
       const k = iso(cur);
       let cls = '';
+      let fill = 0;
       let m = -1;
       if (cur.getFullYear() !== y) cls = 'x';
       else {
-        cls = k > t ? 'f' : days.has(k) ? 'on' : '';
+        const e = entries?.[k];
+        if (k > t) cls = 'f';
+        else if (e?.on) cls = e.kind ? 'on fz' : 'on';
+        else { fill = fillOf(e, target); cls = fill > 0 ? 'p' : ''; }
         if (k === t) cls += ' t';
         m = cur.getMonth();
       }
-      cells.push(<i key={i} class={cls || undefined} data-m={m >= 0 ? m : undefined} />);
+      cells.push(<i key={i} class={cls || undefined} style={fill > 0 ? { '--fill': String(fill) } : undefined} data-m={m >= 0 ? m : undefined} />);
     }
     rows.push(
       <div key={'l' + r} class="hm">{labels}</div>,

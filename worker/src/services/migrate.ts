@@ -34,12 +34,13 @@ export async function legacyMigration(env: Env, sub: string): Promise<Migration 
     created: now,
     updated: now,
     deleted: 0,
+    target: 1,
   };
   const entries: Entry[] = [];
   for (const [day, v] of Object.entries(rec.days)) {
     const t = Number(v?.t);
     if (!DAY.test(day) || !Number.isFinite(t) || t < 0) continue;
-    entries.push({ taskId: task.id, day, on: v.on ? 1 : 0, t });
+    entries.push({ taskId: task.id, day, on: v.on ? 1 : 0, t, n: v.on ? 1 : 0, kind: 0 });
   }
   return { task, entries, finish: () => env.DAYS.delete(key) };
 }

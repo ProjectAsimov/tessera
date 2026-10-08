@@ -11,3 +11,12 @@
 .share-link { word-break: break-all; user-select: text; font-size: 13px; }
 .member-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--cell); background: var(--bg); }
 .member-name { display: flex; align-items: center; gap: 6px; font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.wallet-pill { display: flex; width: fit-content; margin: -6px auto 14px; gap: 12px; align-items: center; padding: 5px 13px; border-radius: 999px; border: 1px solid var(--cell); background: var(--panel); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; font-variant-numeric: tabular-nums; }
+.today.multi { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px; cursor: default; }
+.today.multi:active { transform: none; }
+.today-txt { flex: 1; text-align: center; font-size: 18px; font-weight: 700; }
+.today.multi .step { width: 52px; height: 52px; flex: none; border-radius: 16px; border: 0; font-size: 28px; font-weight: 700; line-height: 1; display: grid; place-items: center; padding: 0; cursor: pointer; background: rgba(0, 0, 0, 0.18); color: inherit; }
+.today.multi.done .step { background: var(--lit-soft); color: var(--lit); }
+.today.multi .step:disabled { opacity: 0.35; cursor: default; }
+.today.multi .step:not(:disabled):active { transform: scale(0.94); }

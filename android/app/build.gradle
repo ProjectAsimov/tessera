@@ -21,11 +21,11 @@ plugins {
 }
 
 def twaManifest = [
-    applicationId: 'com.projectasimov.tasktracker',
+    applicationId: 'com.projectasimov.tessera',
     hostName: 'projectasimov.github.io', // The domain being opened in the TWA.
-    launchUrl: '/tasktracker/', // The start path for the TWA. Must be relative to the domain.
-    name: 'TaskTracker', // The application name.
-    launcherName: 'Tasks', // The name shown on the Android Launcher.
+    launchUrl: '/tessera/', // The start path for the TWA. Must be relative to the domain.
+    name: 'Tessera', // The application name.
+    launcherName: 'Tessera', // The name shown on the Android Launcher.
     themeColor: '#0C0A12', // The color used for the status bar.
     themeColorDark: '#000000', // The color used for the dark status bar.
     navigationColor: '#0C0A12', // The color used for the navigation bar.
@@ -52,9 +52,9 @@ def twaManifest = [
 
 android {
     compileSdkVersion 36
-    namespace "com.projectasimov.tasktracker"
+    namespace "com.projectasimov.tessera"
     defaultConfig {
-        applicationId "com.projectasimov.tasktracker"
+        applicationId "com.projectasimov.tessera"
         minSdkVersion 21
         targetSdkVersion 36
         versionCode 1
@@ -76,12 +76,12 @@ android {
             // The URL the Web Manifest for the Progressive Web App that the TWA points to. This
             // is used by Chrome OS and Meta Quest to open the Web version of the PWA instead of
             // the TWA, as it will probably give a better user experience for non-mobile devices.
-            resValue "string", "webManifestUrl", 'https://projectasimov.github.io/tasktracker/manifest.webmanifest'
+            resValue "string", "webManifestUrl", 'https://projectasimov.github.io/tessera/manifest.webmanifest'
         
 
         
             // This is used by Meta Quest.
-            resValue "string", "fullScopeUrl", 'https://projectasimov.github.io/tasktracker/'
+            resValue "string", "fullScopeUrl", 'https://projectasimov.github.io/tessera/'
         
 
         

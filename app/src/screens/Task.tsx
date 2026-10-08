@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { IconButton, Button } from '../components/Button';
 import { StatTile, StatRow } from '../components/StatTile';
 import { Heatmap } from '../components/Heatmap';
@@ -6,18 +6,18 @@ import { Leaderboard } from '../components/Leaderboard';
 import { Sheet } from '../components/Sheet';
 import { Icon } from '../components/Icon';
 import { toast } from '../components/Toast';
-import { entries, taskById, toggleDay, updateTask, deleteTask } from '../model/store';
-import { onDays, taskStats, yearsWithData } from '../lib/stats';
+import { entries, taskById, updateTask, deleteTask, wallet } from '../model/store';
+import { toggleToday, bumpToday } from '../model/rewards';
+import { onDays, taskStats, yearsWithData, tier } from '../lib/stats';
 import { todayIso, shortMonth } from '../lib/dates';
 import { taskVars } from '../lib/theme';
 import { back, push, openSheet, closeSheet, swapSheet, sheet, leaveTask } from '../lib/nav';
 import { lastSyncAt } from '../model/sync';
-import { board, boardError, loadBoard, clearBoard, shareTask, leaveCurrentGroup, removeGroupMember, inviteLink } from '../model/groups';
+import { board, boardError, loadBoard, clearBoard, shareTask, leaveCurrentGroup, removeGroupMember, inviteLink, shoutTo } from '../model/groups';
 import './Task.css';
 
 export function TaskScreen({ taskId }: { taskId: string }) {
   const task = taskById(taskId);
-  const btn = useRef<HTMLButtonElement>(null);
   const [shareBusy, setShareBusy] = useState(false);
   const [shareCode, setShareCode] = useState<string | null>(null);
   const [copyNote, setCopyNote] = useState('');
@@ -37,16 +37,29 @@ export function TaskScreen({ taskId }: { taskId: string }) {
     );
   }
   const today = todayIso();
-  const days = onDays(entries.value[taskId]);
-  const st = taskStats(days);
+  const map = entries.value[taskId];
+  const days = onDays(map);
+  const st = taskStats(map);
   const done = days.has(today);
+  const multi = task.target > 1;
+  const nToday = map?.[today]?.n ?? 0;
+  const flame = tier(st.streak);
+  const w = wallet.value;
   const isHost = board.value?.members.find((m) => m.isMe)?.isHost ?? false;
 
-  const onToday = () => {
-    const on = toggleDay(taskId, today);
-    const b = btn.current;
-    if (on && b) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
+  const pop = () => {
+    const b = document.querySelector<HTMLElement>('.screen.task .today');
+    if (b) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
   };
+  const onToday = () => {
+    if (toggleToday(taskId)) pop();
+  };
+  const onPlus = () => {
+    const before = done;
+    const e = bumpToday(taskId, 1);
+    if (e.on && !before) pop();
+  };
+  const onMinus = () => { bumpToday(taskId, -1); };
 
   const onShare = async () => {
     setShareBusy(true);
@@ -88,10 +101,26 @@ export function TaskScreen({ taskId }: { taskId: string }) {
         <IconButton icon="dots" label="More" onClick={() => openSheet('menu')} />
       </header>
 
-      <button ref={btn} type="button" class={'today rip' + (done ? ' done' : '')} onClick={onToday} aria-pressed={done}>
-        {done ? <>Done today &#10003;<small>{st.streak > 1 ? `Day ${st.streak} in a row. ` : ''}Tap to undo</small></>
-              : <>Mark today<small>{st.streak > 0 ? `Keep your ${st.streak}-day streak going` : 'Tap once to light up today'}</small></>}
+      <button type="button" class="wallet-pill" onClick={() => openSheet('settings')} aria-label={`Wallet: ${w.gems} gems, ${w.freezes} streak freezes`}>
+        <span>{'💎'} {w.gems}</span>
+        <span>{'❄'} {w.freezes}</span>
       </button>
+
+      {multi ? (
+        <div class={'today multi' + (done ? ' done' : '') + (flame ? ' flame-' + flame : '')}>
+          <button type="button" class="step rip" onClick={onMinus} disabled={nToday <= 0} aria-label="Take one event back">&minus;</button>
+          <div class="today-txt" aria-live="polite">
+            Logged {nToday} of {task.target} today
+            <small>{done ? (st.streak > 1 ? `It counts. Day ${st.streak} in a row` : 'It counts today') : `${Math.ceil(0.7 * task.target)} counts as a day`}</small>
+          </div>
+          <button type="button" class="step rip" onClick={onPlus} disabled={nToday >= task.target} aria-label="Log one more event">+</button>
+        </div>
+      ) : (
+        <button type="button" class={'today rip' + (done ? ' done' : '') + (flame ? ' flame-' + flame : '')} onClick={onToday} aria-pressed={done}>
+          {done ? <>Done today &#10003;<small>{st.streak > 1 ? `Day ${st.streak} in a row. ` : ''}Tap to undo</small></>
+                : <>Mark today<small>{st.streak > 0 ? `Keep your ${st.streak}-day streak going` : 'Tap once to light up today'}</small></>}
+        </button>
+      )}
 
       <StatRow>
         <StatTile value={st.streak} label="day streak" sub={`best ${st.best}`} />
@@ -107,12 +136,13 @@ export function TaskScreen({ taskId }: { taskId: string }) {
           onInvite={onInvite}
           onLeave={onLeave}
           onManage={() => openSheet('members')}
+          onShout={(userId) => { void shoutTo(task.groupId!, userId); }}
         />
       )}
       {task.groupId && !board.value && boardError.value && <p class="hint">Couldn't load leaderboard.</p>}
 
-      {yearsWithData(days).map((y) => (
-        <Heatmap key={y} year={y} days={days} onOpenMonth={(yy, m) => push({ name: 'month', taskId, y: yy, m })} />
+      {yearsWithData(map).map((y) => (
+        <Heatmap key={y} year={y} entries={map} target={task.target} onOpenMonth={(yy, m) => push({ name: 'month', taskId, y: yy, m })} />
       ))}
       <p class="home-hint">Tap the grid to open a month and edit past days.</p>
 

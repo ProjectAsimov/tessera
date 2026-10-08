@@ -2,11 +2,13 @@ import { render } from 'preact';
 import { effect } from '@preact/signals';
 import './styles/tokens.css';
 import './styles/base.css';
+import './styles/flame.css';
 import { App } from './app';
 import { migrateLegacy } from './model/migrate';
 import * as store from './model/store';
 import { session, syncOn, statusNote, welcomed, finishSignIn, reloadSessionPrefs } from './model/session';
 import { startSync, sync } from './model/sync';
+import { autoFreeze } from './model/rewards';
 import { startTheme, reloadThemePrefs } from './lib/theme';
 import { startNav, openSheet } from './lib/nav';
 import { startRipple } from './lib/ripple';
@@ -23,6 +25,8 @@ async function boot(): Promise<void> {
   reloadSessionPrefs();
   reloadThemePrefs();
   store.load();
+  // With sync available, the freeze check runs after the first sync (so another device's freeze is seen first).
+  if (!(session.value && syncOn.value)) autoFreeze();
   startTheme();
   startNav();
   startRipple();

@@ -1,3 +1,6 @@
 .task-form .sheet-label:first-child { margin-top: 14px; }
 .form-actions { margin-top: 22px; }
 .form-actions .b { flex: 1; padding: 13px; font-size: 15px; border-radius: 999px; }
+.stepper { display: flex; align-items: center; gap: 14px; }
+.stepper .b { width: 44px; height: 40px; padding: 0; font-size: 20px; line-height: 1; }
+.stepper output { min-width: 32px; text-align: center; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }

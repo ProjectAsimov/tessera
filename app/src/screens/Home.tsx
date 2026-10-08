@@ -1,9 +1,10 @@
 import { useComputed } from '@preact/signals';
 import { IconButton } from '../components/Button';
 import { ListRow } from '../components/ListRow';
-import { activeTasks, archivedTasks, entries, toggleDay, storageWarning } from '../model/store';
+import { activeTasks, archivedTasks, entries, storageWarning } from '../model/store';
+import { toggleToday, bumpToday } from '../model/rewards';
 import { session, syncOn, statusNote } from '../model/session';
-import { onDays, streak, lastDays } from '../lib/stats';
+import { onDays, streak, lastDays, tier, fillOf } from '../lib/stats';
 import { todayIso } from '../lib/dates';
 import { showArchived } from '../lib/prefs';
 import { push, openSheet } from '../lib/nav';
@@ -22,19 +23,30 @@ export function Home() {
   });
 
   const row = (t: Task) => {
-    const days = onDays(entries.value[t.id]);
+    const map = entries.value[t.id];
+    const days = onDays(map);
+    const s = streak(days);
+    const multi = t.target > 1;
     return (
       <ListRow
         key={t.id}
         task={t}
-        streak={streak(days)}
-        strip={strip14.map((d) => days.has(d))}
+        streak={s}
+        tier={tier(s)}
+        strip={strip14.map((d) => ({ fill: fillOf(map?.[d], t.target), on: days.has(d), fz: !!map?.[d]?.kind }))}
+        n={map?.[today]?.n ?? 0}
         doneToday={days.has(today)}
         onOpen={() => push({ name: 'task', taskId: t.id })}
+        onDecrement={multi ? () => { bumpToday(t.id, -1); } : undefined}
         onToggleToday={(e) => {
-          const on = toggleDay(t.id, today);
           const el = e.currentTarget as HTMLElement | null;
-          if (on && el) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+          let lit: boolean;
+          if (multi) {
+            const before = days.has(today);
+            const entry = bumpToday(t.id, 1);
+            lit = !!entry.on && !before;
+          } else lit = toggleToday(t.id);
+          if (lit && el) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
         }}
       />
     );
@@ -43,7 +55,7 @@ export function Home() {
   return (
     <div class="screen home">
       <header class="top">
-        <h1>TaskTracker</h1>
+        <h1>Tessera</h1>
         <div class="actions">
           <IconButton icon="plus" label="Add task" class="accent" onClick={() => openSheet('add')} />
           <IconButton icon="gear" label="Settings" onClick={() => openSheet('settings')} />

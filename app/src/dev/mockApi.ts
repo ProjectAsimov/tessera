@@ -2,8 +2,8 @@
 // when VITE_MOCK_API=1 so the UI can be exercised without the worker.
 import type { Api } from '../model/api';
 import { HttpError } from '../model/api';
-import type { Task, Entry, Me, SyncRequest, SyncResponse, Group, Member, GroupPreview, GroupAndTask, GroupBoard, ColorId, IconId } from '../model/types';
-import { onDays, streak, countMonth } from '../lib/stats';
+import type { Task, Entry, Me, SyncRequest, SyncResponse, Group, Member, GroupPreview, GroupAndTask, GroupBoard, ColorId, IconId, Wallet, ShoutResult } from '../model/types';
+import { onDays, countedDays, streak, countMonth } from '../lib/stats';
 import { parseDay } from '../lib/dates';
 
 export const MOCK_TOKEN = 'mock-session-token-0123456789abcdefghijklmnopqrstuvwxyz';
@@ -13,6 +13,7 @@ const MAX_TASKS = 200, MAX_ENTRIES = 20000;
 const serverTasks = new Map<string, Task>();
 const serverEntries = new Map<string, Entry>(); // "taskId|day"
 let sessions = new Set<string>([MOCK_TOKEN]);
+let serverWallet: Wallet = { gems: 0, freezes: 0, milestones: [], updated: 0 };
 
 function delay(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)); }
 
@@ -23,9 +24,9 @@ function auth(token: string): void {
 /** Seed the mock server with a legacy-style "Gym" task (like migrate.ts on the worker would). */
 export function seedServerGym(days: string[]): void {
   const now = Date.now();
-  const t: Task = { id: 'server-gym-task', ownerId: USER.id, name: 'Gym', color: 'purple', icon: 'dumbbell', archived: 0, created: now - 1, updated: now - 1, deleted: 0 };
+  const t: Task = { id: 'server-gym-task', ownerId: USER.id, name: 'Gym', color: 'purple', icon: 'dumbbell', archived: 0, created: now - 1, updated: now - 1, deleted: 0, target: 1 };
   serverTasks.set(t.id, t);
-  for (const d of days) serverEntries.set(t.id + '|' + d, { taskId: t.id, day: d, on: 1, t: 0 });
+  for (const d of days) serverEntries.set(t.id + '|' + d, { taskId: t.id, day: d, on: 1, t: 0, n: 1, kind: 0 });
 }
 
 // --- Phase 2: groups and the leaderboard --------------------------------
@@ -70,22 +71,52 @@ function isoOf(d: Date): string {
 function addBuddyToGroup(groupId: string, name: string, color: ColorId, icon: IconId): void {
   const taskId = 'buddy-task-' + groupId;
   const now = Date.now();
-  buddyTasks.set(taskId, { id: taskId, ownerId: BUDDY.id, name, color, icon, archived: 0, groupId, created: now - 1, updated: now - 1, deleted: 0 });
+  buddyTasks.set(taskId, { id: taskId, ownerId: BUDDY.id, name, color, icon, archived: 0, groupId, created: now - 1, updated: now - 1, deleted: 0, target: 1 });
   const r = rng(groupId.length + 11);
   const today = new Date();
   for (let i = 1; i <= 60; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    if (r() < 0.6) buddyEntries.set(taskId + '|' + isoOf(d), { taskId, day: isoOf(d), on: 1, t: now - i * 86400000 });
+    if (r() < 0.6) buddyEntries.set(taskId + '|' + isoOf(d), { taskId, day: isoOf(d), on: 1, t: now - i * 86400000, n: 1, kind: 0 });
   }
   for (let i = 1; i <= 3; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    buddyEntries.set(taskId + '|' + isoOf(d), { taskId, day: isoOf(d), on: 1, t: now - i * 1000 });
+    buddyEntries.set(taskId + '|' + isoOf(d), { taskId, day: isoOf(d), on: 1, t: now - i * 1000, n: 1, kind: 0 });
   }
   const m = memberships.get(groupId) ?? new Map<string, Membership>();
   m.set(BUDDY.id, { taskId, joined: now - 86400000 * 5 });
   memberships.set(groupId, m);
+}
+
+// Shoutouts, keyed "groupId|from|to|day". A few are seeded so counts show in dev.
+const shouts = new Set<string>();
+function seedShouts(groupId: string): void {
+  for (const i of [1, 2, 4]) shouts.add([groupId, BUDDY.id, USER.id, isoOf(new Date(Date.now() - i * 86400000))].join('|'));
+  for (const [i, from] of [[1, 'mock-sub-3'], [3, 'mock-sub-4']] as const) shouts.add([groupId, from, BUDDY.id, isoOf(new Date(Date.now() - i * 86400000))].join('|'));
+}
+function receivedShouts(groupId: string, to: string, today: string): number {
+  const from = isoOf(new Date(parseDay(today).getTime() - 6 * 86400000));
+  let n = 0;
+  for (const k of shouts) {
+    const [g, , t, d] = k.split('|') as [string, string, string, string];
+    if (g === groupId && t === to && d >= from && d <= today) n++;
+  }
+  return n;
+}
+
+/** Consecutive days (ending today or yesterday) on which both day sets are on. */
+function friendStreak(a: Set<string>, b: Set<string>, today: string): number {
+  const both = new Set<string>();
+  for (const d of a) if (b.has(d)) both.add(d);
+  return streak(both, parseDay(today));
+}
+
+function entryMapOf(userId: string, taskId: string): Record<string, Entry> {
+  const entryMap = userId === USER.id ? serverEntries : buddyEntries;
+  const map: Record<string, Entry> = {};
+  for (const [k, e] of entryMap) if (k.startsWith(taskId + '|')) map[e.day] = e;
+  return map;
 }
 
 function findGroupByCode(code: string): GroupRow | undefined {
@@ -97,13 +128,12 @@ function toGroup(g: GroupRow): Group {
   return { id: g.id, name: g.name, hostId: g.hostId, inviteCode: g.inviteCode, memberLimit: g.memberLimit, members: memberships.get(g.id)?.size ?? 0, created: g.created };
 }
 
-function memberStats(userId: string, taskId: string, today: string): Member | null {
+function memberStats(userId: string, taskId: string, today: string): Omit<Member, 'shouts' | 'shoutedToday' | 'friend'> | null {
   const task = userId === USER.id ? serverTasks.get(taskId) : buddyTasks.get(taskId);
   if (!task || task.deleted) return null;
-  const entryMap = userId === USER.id ? serverEntries : buddyEntries;
-  const map: Record<string, Entry> = {};
-  for (const [k, e] of entryMap) if (k.startsWith(taskId + '|')) map[e.day] = e;
-  const days = onDays(map);
+  const map = entryMapOf(userId, taskId);
+  const days = onDays(map); // streak: every day that is on, including freezes and repairs
+  const counted = countedDays(map); // month / total: normal days only
   const now = parseDay(today);
   const list = Array.from(days).sort();
   return {
@@ -112,8 +142,8 @@ function memberStats(userId: string, taskId: string, today: string): Member | nu
     isHost: false, // set by caller
     isMe: userId === USER.id,
     streak: streak(days, now),
-    month: countMonth(days, now.getFullYear(), now.getMonth()),
-    total: days.size,
+    month: countMonth(counted, now.getFullYear(), now.getMonth()),
+    total: counted.size,
     lastDay: list.length ? list[list.length - 1]! : null,
   };
 }
@@ -124,6 +154,7 @@ function memberStats(userId: string, taskId: string, today: string): Member | nu
   groups.set(id, { id, name: 'Morning Pages', hostId: BUDDY.id, inviteCode: KNOWN_JOIN_CODE, memberLimit: 50, created: Date.now() - 86400000 * 20 });
   groupMeta.set(id, { color: 'blue', icon: 'pen' });
   addBuddyToGroup(id, 'Morning Pages', 'blue', 'pen');
+  seedShouts(id);
 })();
 
 export const mockApi: Api = {
@@ -142,7 +173,7 @@ export const mockApi: Api = {
       if (cur && cur.ownerId !== USER.id) throw new HttpError(403, 'not yours');
       if (!cur || t.updated > cur.updated) {
         // The server owns groupId: keep whatever it already had, ignore the incoming value.
-        const merged: Task = { ...t, ownerId: USER.id, groupId: cur?.groupId };
+        const merged: Task = { ...t, target: t.target ?? 1, ownerId: USER.id, groupId: cur?.groupId };
         if (!merged.groupId) delete merged.groupId;
         serverTasks.set(t.id, merged);
         if (merged.deleted && cur?.groupId) {
@@ -155,10 +186,11 @@ export const mockApi: Api = {
       if (!serverTasks.has(e.taskId)) continue; // unknown task ids are ignored
       const k = e.taskId + '|' + e.day;
       const cur = serverEntries.get(k);
-      if (!cur || e.t > cur.t) serverEntries.set(k, e);
+      if (!cur || e.t > cur.t) serverEntries.set(k, { ...e, n: e.n ?? (e.on ? 1 : 0), kind: e.kind ?? 0 });
     }
+    if (body.wallet && body.wallet.updated > serverWallet.updated) serverWallet = { ...body.wallet, milestones: [...body.wallet.milestones] };
     if (serverTasks.size > MAX_TASKS) throw new HttpError(413, 'too many tasks');
-    return { tasks: Array.from(serverTasks.values()), entries: Array.from(serverEntries.values()), now: Date.now() };
+    return { tasks: Array.from(serverTasks.values()), entries: Array.from(serverEntries.values()), wallet: serverWallet, now: Date.now() };
   },
   async logout(token) {
     await delay(80);
@@ -181,6 +213,7 @@ export const mockApi: Api = {
     const updated: Task = { ...t, groupId: id, updated: Date.now() };
     serverTasks.set(t.id, updated);
     addBuddyToGroup(id, t.name, t.color, t.icon);
+    seedShouts(id);
     return { group: toGroup(g), task: updated };
   },
 
@@ -205,7 +238,7 @@ export const mockApi: Api = {
     if (m.size >= g.memberLimit) throw new HttpError(409, 'group full');
     const meta = groupMeta.get(g.id) ?? { color: 'purple' as ColorId, icon: 'check' as IconId };
     const now = Date.now();
-    const task: Task = { id: 'joined-' + Math.random().toString(36).slice(2, 10), ownerId: USER.id, name: g.name, color: meta.color, icon: meta.icon, archived: 0, groupId: g.id, created: now, updated: now, deleted: 0 };
+    const task: Task = { id: 'joined-' + Math.random().toString(36).slice(2, 10), ownerId: USER.id, name: g.name, color: meta.color, icon: meta.icon, archived: 0, groupId: g.id, created: now, updated: now, deleted: 0, target: 1 };
     serverTasks.set(task.id, task);
     m.set(USER.id, { taskId: task.id, joined: now });
     memberships.set(g.id, m);
@@ -219,12 +252,34 @@ export const mockApi: Api = {
     const m = g ? memberships.get(groupId) : undefined;
     if (!g || !m || !m.has(USER.id)) throw new HttpError(404, 'not found');
     const members: Member[] = [];
+    const myTask = m.get(USER.id)!.taskId;
+    const mine = onDays(entryMapOf(USER.id, myTask));
     for (const [userId, mem] of m) {
       const stats = memberStats(userId, mem.taskId, today);
-      if (stats) members.push({ ...stats, isHost: userId === g.hostId });
+      if (!stats) continue;
+      members.push({
+        ...stats,
+        isHost: userId === g.hostId,
+        shouts: receivedShouts(groupId, userId, today),
+        shoutedToday: userId !== USER.id && shouts.has([groupId, USER.id, userId, today].join('|')),
+        friend: userId === USER.id ? 0 : friendStreak(mine, onDays(entryMapOf(userId, mem.taskId)), today),
+      });
     }
     members.sort((a, b) => b.streak - a.streak || b.month - a.month || b.total - a.total || a.name.localeCompare(b.name));
     return { group: toGroup(g), members };
+  },
+
+  async shout(token, groupId, userId): Promise<ShoutResult> {
+    await delay(150);
+    auth(token);
+    const m = groupId ? memberships.get(groupId) : undefined;
+    if (!m || !m.has(USER.id) || !m.has(userId)) throw new HttpError(404, 'not found');
+    if (userId === USER.id) throw new HttpError(400, 'cannot shout yourself');
+    const day = isoOf(new Date());
+    const key = [groupId, USER.id, userId, day].join('|');
+    if (shouts.has(key)) throw new HttpError(409, 'already today');
+    shouts.add(key);
+    return { ok: true, count: receivedShouts(groupId, userId, day) };
   },
 
   async leaveGroup(token, groupId) {

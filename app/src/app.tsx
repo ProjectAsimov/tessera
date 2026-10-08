@@ -7,6 +7,7 @@ import { Welcome } from './screens/Welcome';
 import { TaskForm } from './screens/TaskForm';
 import { Join } from './screens/Join';
 import { Toast } from './components/Toast';
+import { MilestoneOverlay } from './components/MilestoneOverlay';
 
 export function App() {
   void screens.value; // subscribe
@@ -26,6 +27,7 @@ export function App() {
       <TaskForm open={sheet.value === 'add'} />
       <TaskForm open={sheet.value === 'edit'} taskId={editingId} />
       <Join open={sheet.value === 'join'} />
+      <MilestoneOverlay />
       <Toast />
     </>
   );

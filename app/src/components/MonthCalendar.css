@@ -14,3 +14,7 @@
 .c.future { background: transparent; box-shadow: inset 0 0 0 1px var(--cell); opacity: 0.55; cursor: default; }
 .c.blank { visibility: hidden; }
 .c:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.c { position: relative; }
+.c.on.fz { background: var(--lit-soft); color: var(--lit); box-shadow: inset 0 0 0 1px var(--lit); }
+.c .fzg { position: absolute; top: 2px; right: 3px; font-size: 11px; line-height: 1; opacity: 0.9; }
+.c.rp { box-shadow: inset 0 0 0 1.5px var(--muted); }

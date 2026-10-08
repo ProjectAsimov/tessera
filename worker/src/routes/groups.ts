@@ -1,7 +1,7 @@
 import { json, readJson } from '../lib/json';
 import { isObject, validateCode, validateTaskId, validateToday, validateUserId } from '../lib/validate';
 import { requireSession } from '../middleware/auth';
-import { createGroup, getBoard, joinGroup, leaveGroup, previewGroup, removeMember } from '../services/groups';
+import { createGroup, getBoard, joinGroup, leaveGroup, previewGroup, removeMember, shout } from '../services/groups';
 import type { Ctx } from '../types';
 
 export async function createGroupRoute(ctx: Ctx): Promise<Response> {
@@ -45,4 +45,13 @@ export async function removeRoute(ctx: Ctx, groupId: string): Promise<Response> 
   const userId = validateUserId(isObject(body) ? body.userId : undefined);
   await removeMember(ctx.env, groupId, s.sub, userId);
   return json({ ok: true }, 200, ctx.cors);
+}
+
+export async function shoutRoute(ctx: Ctx, groupId: string): Promise<Response> {
+  const s = await requireSession(ctx);
+  const body = await readJson(ctx.req);
+  const userId = validateUserId(isObject(body) ? body.userId : undefined);
+  const today = validateToday(ctx.url.searchParams.get('today') ?? (isObject(body) ? body.today : undefined));
+  const result = await shout(ctx.env, groupId, s.sub, userId, today);
+  return json(result, 200, ctx.cors);
 }

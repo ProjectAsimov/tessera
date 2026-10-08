@@ -1,17 +1,19 @@
-import type { Entry, Group, Membership, Task } from '../types';
+import type { Entry, Group, Membership, Task, Wallet } from '../types';
 
 interface TaskRow {
   id: string; owner_id: string; name: string; color: string; icon: string;
-  archived: number; group_id: string | null; created: number; updated: number; deleted: number;
+  archived: number; group_id: string | null; created: number; updated: number; deleted: number; target: number;
 }
-interface EntryRow { task_id: string; day: string; on_: number; t: number }
+interface EntryRow { task_id: string; day: string; on_: number; t: number; n: number; kind: number }
 
 const taskFromRow = (r: TaskRow): Task => ({
   id: r.id, ownerId: r.owner_id, name: r.name, color: r.color, icon: r.icon,
   archived: r.archived ? 1 : 0, groupId: r.group_id, created: r.created, updated: r.updated,
-  deleted: r.deleted ? 1 : 0,
+  deleted: r.deleted ? 1 : 0, target: r.target,
 });
-const entryFromRow = (r: EntryRow): Entry => ({ taskId: r.task_id, day: r.day, on: r.on_ ? 1 : 0, t: r.t });
+const entryFromRow = (r: EntryRow): Entry => ({
+  taskId: r.task_id, day: r.day, on: r.on_ ? 1 : 0, t: r.t, n: r.n, kind: r.kind === 1 ? 1 : r.kind === 2 ? 2 : 0,
+});
 
 export function upsertUser(db: D1Database, id: string, name: string, email: string): D1PreparedStatement {
   return db
@@ -26,7 +28,7 @@ export async function tasksForOwner(db: D1Database, ownerId: string): Promise<Ta
 
 export async function entriesForOwner(db: D1Database, ownerId: string): Promise<Entry[]> {
   const { results } = await db
-    .prepare('SELECT e.task_id, e.day, e.on_, e.t FROM entries e JOIN tasks t ON t.id = e.task_id WHERE t.owner_id = ?')
+    .prepare('SELECT e.task_id, e.day, e.on_, e.t, e.n, e.kind FROM entries e JOIN tasks t ON t.id = e.task_id WHERE t.owner_id = ?')
     .bind(ownerId)
     .all<EntryRow>();
   return results.map(entryFromRow);
@@ -49,22 +51,22 @@ export async function existingTaskIds(db: D1Database, ids: string[]): Promise<Se
 export function upsertTask(db: D1Database, t: Task): D1PreparedStatement {
   return db
     .prepare(
-      `INSERT INTO tasks (id, owner_id, name, color, icon, archived, group_id, created, updated, deleted)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+      `INSERT INTO tasks (id, owner_id, name, color, icon, archived, group_id, created, updated, deleted, target)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
        ON CONFLICT(id) DO UPDATE SET
-         name = ?3, color = ?4, icon = ?5, archived = ?6, group_id = ?7, created = ?8, updated = ?9, deleted = ?10
+         name = ?3, color = ?4, icon = ?5, archived = ?6, group_id = ?7, created = ?8, updated = ?9, deleted = ?10, target = ?11
        WHERE tasks.owner_id = ?2 AND ?9 > tasks.updated`,
     )
-    .bind(t.id, t.ownerId, t.name, t.color, t.icon, t.archived, t.groupId, t.created, t.updated, t.deleted);
+    .bind(t.id, t.ownerId, t.name, t.color, t.icon, t.archived, t.groupId, t.created, t.updated, t.deleted, t.target);
 }
 
 export function upsertEntry(db: D1Database, e: Entry): D1PreparedStatement {
   return db
     .prepare(
-      `INSERT INTO entries (task_id, day, on_, t) VALUES (?1, ?2, ?3, ?4)
-       ON CONFLICT(task_id, day) DO UPDATE SET on_ = ?3, t = ?4 WHERE ?4 > entries.t`,
+      `INSERT INTO entries (task_id, day, on_, t, n, kind) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+       ON CONFLICT(task_id, day) DO UPDATE SET on_ = ?3, t = ?4, n = ?5, kind = ?6 WHERE ?4 > entries.t`,
     )
-    .bind(e.taskId, e.day, e.on, e.t);
+    .bind(e.taskId, e.day, e.on, e.t, e.n, e.kind);
 }
 
 export async function taskById(db: D1Database, id: string): Promise<Task | null> {
@@ -164,18 +166,72 @@ export async function groupMemberTasks(db: D1Database, groupId: string): Promise
   return results.map((r) => ({ userId: r.user_id, name: r.name, taskId: r.task_id }));
 }
 
-/** Days marked "on" for each of these tasks, newest first. Chunked like existingTaskIds. */
-export async function onDaysByTask(db: D1Database, taskIds: string[]): Promise<Map<string, string[]>> {
-  const out = new Map<string, string[]>();
+/** Days marked "on" for each of these tasks (newest first), with their kind (1/2 = freeze/repair). Chunked like existingTaskIds. */
+export async function onDaysByTask(db: D1Database, taskIds: string[]): Promise<Map<string, { day: string; kind: number }[]>> {
+  const out = new Map<string, { day: string; kind: number }[]>();
   for (let i = 0; i < taskIds.length; i += 50) {
     const chunk = taskIds.slice(i, i + 50);
-    const sql = `SELECT task_id, day FROM entries WHERE on_ = 1 AND task_id IN (${chunk.map(() => '?').join(',')}) ORDER BY day DESC`;
-    const { results } = await db.prepare(sql).bind(...chunk).all<{ task_id: string; day: string }>();
+    const sql = `SELECT task_id, day, kind FROM entries WHERE on_ = 1 AND task_id IN (${chunk.map(() => '?').join(',')}) ORDER BY day DESC`;
+    const { results } = await db.prepare(sql).bind(...chunk).all<{ task_id: string; day: string; kind: number }>();
     for (const r of results) {
       const arr = out.get(r.task_id) ?? [];
-      arr.push(r.day);
+      arr.push({ day: r.day, kind: r.kind });
       out.set(r.task_id, arr);
     }
   }
   return out;
+}
+
+// --- wallet (Slice A) ---
+
+interface WalletRow { gems: number; freezes: number; milestones: string; wallet_updated: number }
+
+export async function walletFor(db: D1Database, userId: string): Promise<Wallet> {
+  const row = await db
+    .prepare('SELECT gems, freezes, milestones, wallet_updated FROM users WHERE id = ?')
+    .bind(userId)
+    .first<WalletRow>();
+  if (!row) return { gems: 0, freezes: 0, milestones: [], updated: 0 };
+  let milestones: string[] = [];
+  try {
+    const m = JSON.parse(row.milestones);
+    if (Array.isArray(m)) milestones = m.filter((x) => typeof x === 'string');
+  } catch { /* corrupt column: treat as empty */ }
+  return { gems: row.gems, freezes: row.freezes, milestones, updated: row.wallet_updated };
+}
+
+// The WHERE guard keeps the merge rule (newest `updated` wins) atomic in SQL.
+export function setWalletStmt(db: D1Database, userId: string, w: Wallet): D1PreparedStatement {
+  return db
+    .prepare('UPDATE users SET gems = ?2, freezes = ?3, milestones = ?4, wallet_updated = ?5 WHERE id = ?1 AND wallet_updated < ?5')
+    .bind(userId, w.gems, w.freezes, JSON.stringify(w.milestones), w.updated);
+}
+
+// --- shoutouts (Slice A) ---
+
+/** Returns false when this (group, from, to, day) shoutout already exists. */
+export async function insertShout(db: D1Database, groupId: string, fromId: string, toId: string, day: string): Promise<boolean> {
+  const r = await db
+    .prepare('INSERT OR IGNORE INTO shoutouts (group_id, from_id, to_id, day) VALUES (?1, ?2, ?3, ?4)')
+    .bind(groupId, fromId, toId, day)
+    .run();
+  return (r.meta.changes ?? 0) > 0;
+}
+
+/** Shoutouts received per user in the group on or after `sinceDay`. */
+export async function shoutsReceived(db: D1Database, groupId: string, sinceDay: string): Promise<Map<string, number>> {
+  const { results } = await db
+    .prepare('SELECT to_id, COUNT(*) AS n FROM shoutouts WHERE group_id = ? AND day >= ? GROUP BY to_id')
+    .bind(groupId, sinceDay)
+    .all<{ to_id: string; n: number }>();
+  return new Map(results.map((r) => [r.to_id, r.n]));
+}
+
+/** Users the caller has shouted at on `day`. */
+export async function shoutedOn(db: D1Database, groupId: string, fromId: string, day: string): Promise<Set<string>> {
+  const { results } = await db
+    .prepare('SELECT to_id FROM shoutouts WHERE group_id = ? AND from_id = ? AND day = ?')
+    .bind(groupId, fromId, day)
+    .all<{ to_id: string }>();
+  return new Set(results.map((r) => r.to_id));
 }

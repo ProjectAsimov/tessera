@@ -1,6 +1,6 @@
 import {
   clearTaskGroupStmt, codeTaken, deleteMembershipStmt, groupById, groupByCode, groupMemberTasks,
-  insertGroup, insertMembership, insertMembershipStmt, membership, upsertUser, onDaysByTask, setTaskGroupStmt, taskById, upsertTask, userName,
+  insertGroup, insertMembership, insertShout, shoutedOn, shoutsReceived, insertMembershipStmt, membership, upsertUser, onDaysByTask, setTaskGroupStmt, taskById, upsertTask, userName,
 } from '../db/queries';
 import { HttpError } from '../lib/json';
 import type { Env, Group, Member, Session, Task } from '../types';
@@ -87,6 +87,7 @@ export async function joinGroup(env: Env, s: Session, code: string): Promise<{ g
     created: now,
     updated: now,
     deleted: 0,
+    target: hostTask.target,
   };
   // One atomic batch. The user row is upserted first: a session can predate the
   // users table, and memberships/tasks both reference it.
@@ -109,17 +110,27 @@ export async function getBoard(env: Env, groupId: string, callerId: string, toda
   const memberTasks = await groupMemberTasks(db, groupId);
   const onDays = await onDaysByTask(db, memberTasks.map((m) => m.taskId));
 
+  const received = await shoutsReceived(db, groupId, addDays(today, -6));
+  const sentToday = await shoutedOn(db, groupId, callerId, today);
+  const mine = memberTasks.find((m) => m.userId === callerId);
+  const mySet = new Set((mine ? onDays.get(mine.taskId) ?? [] : []).map((e) => e.day));
+
   const members: Member[] = memberTasks.map((m) => {
-    const days = onDays.get(m.taskId) ?? []; // newest first
+    const entries = onDays.get(m.taskId) ?? []; // newest first; kind 1/2 keep streaks alive but are not counted
+    const days = entries.map((e) => e.day);
+    const counted = entries.filter((e) => e.kind === 0).map((e) => e.day);
     return {
       userId: m.userId,
       name: m.name,
       isHost: m.userId === group.hostId,
       isMe: m.userId === callerId,
-      streak: streak(days, today),
-      month: days.filter((d) => d.slice(0, 7) === today.slice(0, 7)).length,
-      total: days.length,
+      streak: streak(new Set(days), today),
+      month: counted.filter((d) => d.slice(0, 7) === today.slice(0, 7)).length,
+      total: counted.length,
       lastDay: days[0] ?? null,
+      shouts: received.get(m.userId) ?? 0,
+      shoutedToday: sentToday.has(m.userId),
+      friend: m.userId === callerId ? 0 : streak(new Set(days.filter((d) => mySet.has(d))), today),
     };
   });
 
@@ -152,8 +163,7 @@ async function removeMembership(db: D1Database, groupId: string, userId: string)
 }
 
 /** Consecutive "on" days ending today or yesterday: a miss today doesn't zero the streak until tomorrow. */
-function streak(daysDesc: string[], today: string): number {
-  const set = new Set(daysDesc);
+function streak(set: Set<string>, today: string): number {
   let cursor = set.has(today) ? today : addDays(today, -1);
   let n = 0;
   while (set.has(cursor)) {
@@ -167,4 +177,17 @@ function addDays(day: string, delta: number): string {
   const d = new Date(day + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + delta);
   return d.toISOString().slice(0, 10);
+}
+
+/** One shoutout per (group, from, to, day). `count` is what the target has received in the last 7 days. */
+export async function shout(env: Env, groupId: string, callerId: string, targetId: string, today: string): Promise<{ ok: true; count: number }> {
+  const db = env.DB;
+  const group = await groupById(db, groupId);
+  if (!group) throw new HttpError(404, 'group not found');
+  if (!(await membership(db, groupId, callerId))) throw new HttpError(403, 'not a member');
+  if (targetId === callerId) throw new HttpError(400, 'cannot shout yourself');
+  if (!(await membership(db, groupId, targetId))) throw new HttpError(404, 'target is not a member');
+  if (!(await insertShout(db, groupId, callerId, targetId, today))) throw new HttpError(409, 'already today');
+  const count = (await shoutsReceived(db, groupId, addDays(today, -6))).get(targetId) ?? 0;
+  return { ok: true, count };
 }

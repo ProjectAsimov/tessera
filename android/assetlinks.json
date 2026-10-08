@@ -3,7 +3,7 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "com.projectasimov.tasktracker",
+      "package_name": "com.projectasimov.tessera",
       "sha256_cert_fingerprints": [
         "5D:AF:0B:9B:DA:1E:61:84:AB:97:1A:41:1A:17:4F:9D:A6:FB:E5:BF:04:C2:28:C4:DF:55:99:2D:05:64:34:24"
       ]

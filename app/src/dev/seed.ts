@@ -3,10 +3,13 @@
 //   ?fresh=1         clear all tt.* keys
 //   ?legacy=1        plant legacy gymyears.* keys to exercise the migration
 //   ?signedin=1      pre-set a mock session
+//   ?seed=a          Slice A showcase: flame tiers, a multi-event task (Water 3/8), a 6-day streak (Meditate),
+//                    a repairable gap and a frozen day (Read), 230 gems + 1 freeze
+//   ?task=<name>     with ?screen=task|month: open that task instead of the first one
 //   ?group=1         share the first seeded task into a group (needs a session; two-row leaderboard)
 //   ?join=<code>     stash a pending join as if `#join=<code>` had been visited (e.g. mockjoin01)
 //   ?screen=task|month|settings|welcome   open that screen after boot (for screenshots)
-import { STATE_KEY, addTask, setDay, tasks, entries, upsertServerTask } from '../model/store';
+import { STATE_KEY, addTask, setDay, setCount, writeEntry, setWallet, tasks, entries, upsertServerTask } from '../model/store';
 import { iso, addDays } from '../lib/dates';
 import { MOCK_TOKEN, seedServerGym, mockApi, KNOWN_JOIN_CODE } from './mockApi';
 import { PENDING_JOIN_KEY } from '../model/groups';
@@ -68,6 +71,27 @@ export async function applySeedParams(): Promise<void> {
       if (s.seed === 2) setDay(t.id, iso(today), true);
     }
   }
+  if (p.get('seed') === 'a') {
+    localStorage.removeItem(STATE_KEY);
+    localStorage.setItem('tt.welcomed', '1');
+    const today = new Date();
+    const day = (i: number) => iso(addDays(today, -i));
+    const stamp = (i: number) => Date.now() - i * 86400000;
+    const gym = addTask('Gym', 'purple', 'dumbbell');
+    for (let i = 0; i < 35; i++) writeEntry(gym.id, day(i), true, 1, 0, stamp(i));
+    const water = addTask('Water', 'blue', 'water', { target: 8 });
+    const counts = [3, 8, 7, 5, 8, 6, 2, 8, 8, 4, 7, 8, 6];
+    counts.forEach((n, k) => setCount(water.id, day(counts.length - k), n, stamp(counts.length - k)));
+    setCount(water.id, day(0), 3);
+    const read = addTask('Read 20 pages', 'teal', 'book');
+    for (const i of [1, 2, 4, 5, 7, 8, 9, 10, 11, 12]) writeEntry(read.id, day(i), true, 1, 0, stamp(i));
+    writeEntry(read.id, day(6), true, 0, 1, stamp(6)); // frozen
+    const med = addTask('Meditate', 'orange', 'meditate');
+    for (let i = 1; i <= 6; i++) writeEntry(med.id, day(i), true, 1, 0, stamp(i));
+    const run = addTask('Run', 'green', 'run');
+    for (let i = 0; i < 120; i++) writeEntry(run.id, day(i), true, 1, 0, stamp(i));
+    setWallet({ gems: 230, freezes: 1 });
+  }
   if (p.get('group') === '1') {
     if (!localStorage.getItem('tt.session')) {
       localStorage.setItem('tt.session', JSON.stringify({ token: MOCK_TOKEN, name: 'Mock User', email: 'mock@example.com' }));
@@ -93,7 +117,8 @@ export function applyScreenParam(): void {
   const p = params();
   const screen = p.get('screen');
   if (!screen) return;
-  const first = earliestTask();
+  const named = p.get('task');
+  const first = (named && tasks.value.find((t) => !t.deleted && t.name === named)) || earliestTask();
   const now = new Date();
   switch (screen) {
     case 'task': if (first) push({ name: 'task', taskId: first.id }); break;

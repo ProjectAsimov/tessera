@@ -1,4 +1,5 @@
-import type { Me, SyncRequest, SyncResponse, ApiError, GroupPreview, GroupBoard, GroupAndTask } from './types';
+import { todayIso } from '../lib/dates';
+import type { Me, SyncRequest, SyncResponse, ApiError, GroupPreview, GroupBoard, GroupAndTask, ShoutResult } from './types';
 
 export const API_URL: string = (import.meta.env.VITE_API_URL as string | undefined) || 'https://tasktracker-sync.projectasimov.workers.dev';
 export const MOCK: boolean = import.meta.env.VITE_MOCK_API === '1';
@@ -24,6 +25,8 @@ export interface Api {
   board(token: string, groupId: string, today: string): Promise<GroupBoard>;
   leaveGroup(token: string, groupId: string): Promise<void>;
   removeMember(token: string, groupId: string, userId: string): Promise<void>;
+  // Slice A: shoutouts.
+  shout(token: string, groupId: string, userId: string): Promise<ShoutResult>;
 }
 
 async function request<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
@@ -60,6 +63,8 @@ const fetchApi: Api = {
   board: (token, groupId, today) => request<GroupBoard>(`/groups/${groupId}/board?today=${encodeURIComponent(today)}`, token),
   leaveGroup: async (token, groupId) => { await request<{ ok: true }>(`/groups/${groupId}/leave`, token, { method: 'POST' }); },
   removeMember: async (token, groupId, userId) => { await request<{ ok: true }>(`/groups/${groupId}/remove`, token, { method: 'POST', body: JSON.stringify({ userId }) }); },
+  // `today` is the client's local date: "one shoutout per day" follows the user's day, not the server's.
+  shout: (token, groupId, userId) => request<ShoutResult>(`/groups/${groupId}/shout`, token, { method: 'POST', body: JSON.stringify({ userId, today: todayIso() }) }),
 };
 
 let impl: Api = fetchApi;
@@ -79,4 +84,5 @@ export const api: Api = {
   board: (t, g, today) => impl.board(t, g, today),
   leaveGroup: (t, g) => impl.leaveGroup(t, g),
   removeMember: (t, g, u) => impl.removeMember(t, g, u),
+  shout: (t, g, u) => impl.shout(t, g, u),
 };

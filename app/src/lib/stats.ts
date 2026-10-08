@@ -11,6 +11,45 @@ export function onDays(entries: DayMap | undefined): Set<string> {
   return s;
 }
 
+/** Days that count toward month / year / total: on and not a freeze or repair. */
+export function countedDays(entries: DayMap | undefined): Set<string> {
+  const s = new Set<string>();
+  if (!entries) return s;
+  for (const k in entries) {
+    const e = entries[k]!;
+    if (e.on && !e.kind) s.add(k);
+  }
+  return s;
+}
+
+/** Days with kind 1 (freeze) or 2 (repair) that are on. */
+export function coveredDays(entries: DayMap | undefined): Set<string> {
+  const s = new Set<string>();
+  if (!entries) return s;
+  for (const k in entries) {
+    const e = entries[k]!;
+    if (e.on && e.kind) s.add(k);
+  }
+  return s;
+}
+
+/** Flame tier for a streak: 0 none, 1 ember (7+), 2 flame (30+), 3 blue (100+), 4 gold (365+). */
+export function tier(streakDays: number): 0 | 1 | 2 | 3 | 4 {
+  return streakDays >= 365 ? 4 : streakDays >= 100 ? 3 : streakDays >= 30 ? 2 : streakDays >= 7 ? 1 : 0;
+}
+
+/** Events needed for a day to count: 70% of the target, rounded up. */
+export function needed(target: number): number {
+  return Math.ceil(0.7 * Math.max(1, target));
+}
+
+/** Fraction of the day's target logged, 0..1 (1 once it counts, or for freeze / repair days). */
+export function fillOf(e: Entry | undefined, target: number): number {
+  if (!e) return 0;
+  if (e.on) return 1;
+  return target <= 1 ? 0 : Math.min(1, e.n / target);
+}
+
 export function isOn(entries: DayMap | undefined, day: string): boolean {
   return !!entries?.[day]?.on;
 }
@@ -61,13 +100,15 @@ export interface TaskStats {
   month: number;
 }
 
-export function taskStats(days: Set<string>, now = new Date()): TaskStats {
+export function taskStats(entries: DayMap | undefined, now = new Date()): TaskStats {
+  const all = onDays(entries);
+  const days = countedDays(entries);
   const y = now.getFullYear(), m = now.getMonth();
   const thisMonth = countMonth(days, y, m);
   const lastMonth = m ? countMonth(days, y, m - 1) : countMonth(days, y - 1, 11);
   return {
-    streak: streak(days, now),
-    best: bestStreak(days),
+    streak: streak(all, now),
+    best: bestStreak(all),
     thisMonth,
     lastMonth,
     monthDelta: thisMonth - lastMonth,
@@ -79,9 +120,9 @@ export function taskStats(days: Set<string>, now = new Date()): TaskStats {
 }
 
 /** Years with any marked day, current year first, newest to oldest. */
-export function yearsWithData(days: Set<string>, now = new Date()): number[] {
+export function yearsWithData(entries: DayMap | undefined, now = new Date()): number[] {
   const ys = new Set<number>([now.getFullYear()]);
-  for (const d of days) ys.add(yearOf(d));
+  for (const d of onDays(entries)) ys.add(yearOf(d));
   return Array.from(ys).sort((a, b) => b - a);
 }
 

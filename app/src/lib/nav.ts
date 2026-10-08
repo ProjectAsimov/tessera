@@ -7,7 +7,7 @@ export type Screen =
   | { name: 'task'; taskId: string }
   | { name: 'month'; taskId: string; y: number; m: number };
 
-export type Sheet = 'settings' | 'welcome' | 'add' | 'edit' | 'menu' | 'share' | 'members' | 'join' | null;
+export type Sheet = 'settings' | 'welcome' | 'add' | 'edit' | 'menu' | 'share' | 'members' | 'join' | 'repair' | null;
 
 interface NavState { screens: Screen[]; sheet: Sheet }
 

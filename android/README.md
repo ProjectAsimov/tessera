@@ -1,12 +1,12 @@
-# TaskTracker — Android TWA (Trusted Web Activity)
+# Tessera — Android TWA (Trusted Web Activity)
 
-This project packages the TaskTracker PWA (https://projectasimov.github.io/tasktracker/)
+This project packages the Tessera PWA (https://projectasimov.github.io/tessera/)
 as an Android app using [Bubblewrap](https://github.com/GoogleChromeLabs/bubblewrap), for
 distribution through Google Play.
 
-- **Package ID:** `com.projectasimov.tasktracker`
+- **Package ID:** `com.projectasimov.tessera`
 - **Host:** `projectasimov.github.io`
-- **Start URL:** `/tasktracker/`
+- **Start URL:** `/tessera/`
 
 ## Signing key
 
@@ -53,7 +53,7 @@ in use), or use Play's "request upload key reset" flow.
    `app-release-signed.apk` (useful for local/manual testing) in this directory.
 4. Copy the new bundle into `dist/` with a version-tagged name, e.g.:
    ```powershell
-   Copy-Item app-release-bundle.aab "dist\tasktracker-1.0.1.aab"
+   Copy-Item app-release-bundle.aab "dist\tessera-1.0.1.aab"
    ```
 
 ### Notes on this environment
@@ -80,10 +80,10 @@ in use), or use Play's "request upload key reset" flow.
 ## Play Console — Internal testing track
 
 1. Create the app in Play Console (if not already created) with package name
-   `com.projectasimov.tasktracker`.
+   `com.projectasimov.tessera`.
 2. Enroll in Play App Signing when prompted during the first upload.
 3. Go to **Testing → Internal testing → Create new release**.
-4. Upload `dist\tasktracker-1.0.1.aab` (or whichever versioned file you just built).
+4. Upload `dist\tessera-1.0.1.aab` (or whichever versioned file you just built).
 5. Fill in release notes, save, and roll out to internal testing.
 6. Add testers (by email or Google Group) under the Internal testing track's "Testers" tab,
    and share the opt-in URL Play generates.
@@ -95,3 +95,12 @@ published at `https://projectasimov.github.io/.well-known/assetlinks.json` so Ch
 the TWA as verified (removing the browser URL bar). Copy its contents into the PWA repo's
 `.well-known/assetlinks.json` and deploy it. If the signing key ever changes (e.g. after a
 Play App Signing key rotation), regenerate this file with the new SHA-256 fingerprint.
+
+## Rename note (TaskTracker -> Tessera)
+
+The app was renamed to Tessera (package `com.projectasimov.tessera`, start URL `/tessera/`).
+The secrets folder is deliberately still `C:\Users\User\.secrets\tasktracker\` and the
+keystore/alias/password are unchanged, so the signing fingerprint is the same.
+When regenerating the project before the `/tessera/` site is live, fetch the manifest/icons
+from the old `/tasktracker/` URLs in memory only, then make sure `app/build.gradle`
+(`webManifestUrl`) and `app/src/main/res/raw/web_app_manifest.json` say `/tessera/`.

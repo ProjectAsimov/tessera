@@ -1,6 +1,6 @@
-# TaskTracker
+# Tessera
 
-Track any yes/no daily task, one square per day. Installable PWA with
+One tile per day for anything you do daily. Installable PWA with
 Google sign-in and cross-device sync.
 
 - `app/` — Vite + TypeScript + Preact frontend, deployed to GitHub Pages by

@@ -7,7 +7,8 @@ import { signal } from '@preact/signals';
 import { api, HttpError } from './api';
 import { session, syncOn, statusNote, setSession } from './session';
 import * as store from './store';
-import type { Entry, Task, SyncRequest } from './types';
+import { autoFreeze } from './rewards';
+import type { Entry, Task, SyncRequest, Wallet } from './types';
 
 export const syncing = signal(false);
 export const lastSyncAt = signal(0);
@@ -37,7 +38,9 @@ function pendingBody(excludeTask?: string): SyncRequest {
     const e = store.entries.value[tid]?.[day];
     if (e) entries.push(e);
   }
-  return { tasks, entries };
+  const body: SyncRequest = { tasks, entries };
+  if (store.isWalletPending()) body.wallet = store.wallet.value;
+  return body;
 }
 
 /**
@@ -47,7 +50,7 @@ function pendingBody(excludeTask?: string): SyncRequest {
  * local-only days are re-posted under the server's id. Otherwise the local task
  * simply goes up with the next sync.
  */
-function reconcileLegacy(serverTasks: Task[], serverEntries: Entry[], snapshot: number): boolean {
+function reconcileLegacy(serverTasks: Task[], serverEntries: Entry[], snapshot: number, serverWallet?: Wallet): boolean {
   const localId = store.legacyTaskId.value;
   if (!localId) return false;
   const local = store.taskById(localId);
@@ -71,7 +74,7 @@ function reconcileLegacy(serverTasks: Task[], serverEntries: Entry[], snapshot: 
     for (const k of Array.from(store.pendingEntries.keys())) if (k.startsWith(localId + '|')) store.pendingEntries.delete(k);
     store.legacyTaskId.value = undefined;
     // Now apply the server state, then layer the moved days on top as fresh local changes.
-    store.replaceFromServer(serverTasks, serverEntries, snapshot);
+    store.replaceFromServer(serverTasks, serverEntries, snapshot, serverWallet);
     for (const e of moved) store.setDay(e.taskId, e.day, !!e.on, Math.max(e.t, 1));
     return true;
   }
@@ -82,7 +85,7 @@ function reconcileLegacy(serverTasks: Task[], serverEntries: Entry[], snapshot: 
 
 export async function sync(): Promise<void> {
   if (!canSync() || syncing.value) return;
-  if (!navigator.onLine) { statusNote.value = 'Offline. Will sync when back online.'; return; }
+  if (!navigator.onLine) { statusNote.value = 'Offline. Will sync when back online.'; autoFreeze(); return; }
   const token = session.value!.token;
   syncing.value = true;
   statusNote.value = 'Syncing…';
@@ -91,11 +94,12 @@ export async function sync(): Promise<void> {
   try {
     const res = await api.sync(token, pendingBody(legacy));
     if (legacy) {
-      if (reconcileLegacy(res.tasks, res.entries, snapshot)) { queueSync(); }
-      else { store.replaceFromServer(res.tasks, res.entries, snapshot); queueSync(); }
+      if (reconcileLegacy(res.tasks, res.entries, snapshot, res.wallet)) { queueSync(); }
+      else { store.replaceFromServer(res.tasks, res.entries, snapshot, res.wallet); queueSync(); }
     } else {
-      store.replaceFromServer(res.tasks, res.entries, snapshot);
+      store.replaceFromServer(res.tasks, res.entries, snapshot, res.wallet);
     }
+    autoFreeze();
     lastSyncAt.value = Date.now();
     statusNote.value = 'Synced just now.';
   } catch (e) {
@@ -106,6 +110,7 @@ export async function sync(): Promise<void> {
       statusNote.value = 'Sync failed (' + e.status + ').';
     } else {
       statusNote.value = 'Could not reach the sync server. Will retry.';
+      autoFreeze(); // offline: still cover yesterday from the local state
     }
   } finally {
     syncing.value = false;
@@ -118,6 +123,8 @@ export function startSync(): void {
   window.addEventListener('online', () => { void sync(); });
   window.addEventListener('tt:signedin', () => { void sync(); });
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && Date.now() - lastSyncAt.value > 30000) void sync();
+    if (document.hidden) return;
+    if (!canSync()) autoFreeze();
+    else if (Date.now() - lastSyncAt.value > 30000) void sync();
   });
 }

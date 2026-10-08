@@ -1,0 +1,31 @@
+/* Flame borders by streak tier: 1 ember (7+), 2 flame (30+), 3 blue (100+), 4 gold (365+).
+   A slow gradient drifts around the border; reduced motion (base.css) leaves it still.
+   The `html` prefix keeps these ahead of the component rules regardless of load order. */
+:root {
+  --f1a: #f59e0b; --f1b: #c2410c;
+  --f2a: #fb923c; --f2b: #ef4444;
+  --f3a: #38bdf8; --f3b: #2563eb;
+  --f4a: #fde047; --f4b: #d97706;
+}
+html .flame-1 { --fa: var(--f1a); --fb: var(--f1b); }
+html .flame-2 { --fa: var(--f2a); --fb: var(--f2b); }
+html .flame-3 { --fa: var(--f3a); --fb: var(--f3b); }
+html .flame-4 { --fa: var(--f4a); --fb: var(--f4b); }
+html .lrow[class*="flame-"] { --flame-fill: var(--panel); padding: 7px; }
+html .today[class*="flame-"] { --flame-fill: var(--btn); padding: 20px 14px; }
+html .today.multi[class*="flame-"] { padding: 12px; }
+html .today.done[class*="flame-"] { --flame-fill: var(--panel); }
+html :is(.lrow, .today)[class*="flame-"] {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--flame-fill), var(--flame-fill)) padding-box,
+    linear-gradient(100deg, var(--fa), var(--fb), var(--fa)) border-box;
+  background-size: 100% 100%, 200% 100%;
+  animation: flame-drift 3.6s ease-in-out infinite alternate;
+  box-shadow: 0 0 14px -4px var(--fb);
+}
+@keyframes flame-drift {
+  from { background-position: 0 0, 0% 0; }
+  to { background-position: 0 0, 100% 0; }
+}
+html .today.pop[class*="flame-"] { animation: flame-drift 3.6s ease-in-out infinite alternate, pop 0.35s ease; }
