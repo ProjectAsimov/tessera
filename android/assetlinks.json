@@ -1,11 +1,14 @@
 [
   {
-    "relation": ["delegate_permission/common.handle_all_urls"],
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
     "target": {
       "namespace": "android_app",
       "package_name": "com.projectasimov.tessera",
       "sha256_cert_fingerprints": [
-        "5D:AF:0B:9B:DA:1E:61:84:AB:97:1A:41:1A:17:4F:9D:A6:FB:E5:BF:04:C2:28:C4:DF:55:99:2D:05:64:34:24"
+        "5D:AF:0B:9B:DA:1E:61:84:AB:97:1A:41:1A:17:4F:9D:A6:FB:E5:BF:04:C2:28:C4:DF:55:99:2D:05:64:34:24",
+        "29:63:3E:D0:AD:5C:E2:51:71:BF:1C:66:4C:A1:15:45:DC:A4:45:69:65:D6:46:70:97:78:17:77:37:92:FE:56"
       ]
     }
   }
