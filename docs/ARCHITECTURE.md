@@ -251,3 +251,34 @@ task colour, not a gem emoji. Code identifiers (`gems`, `wallet.gems`) stay.
 - Join sheet and Share sheet carry one line: "Members see each other's names,
   streaks and shoutouts. By joining you agree to the community guidelines."
   linking to `https://projectasimov.github.io/guidelines.html`.
+
+## Slice B: badges and year in review (app only)
+
+### Badges (per task, computed from entries; no server change)
+- **Perfect week**: a Sunday–Saturday week in which all 7 days are `on` with
+  `kind: 0` (frozen or repaired days don't make a perfect week). Key
+  `<taskId>:pw:<YYYY-MM-DD of that Sunday>`.
+- **Perfect month**: every day of a calendar month `on` with `kind: 0`. Key
+  `<taskId>:pm:<YYYY-MM>`. A perfect month also implies its weeks; both award.
+- Awards (once per key, via `wallet.milestones` like other milestones): perfect
+  week +10 tiles, perfect month +50 tiles. Checked whenever a day is marked and
+  on load; award only for weeks/months that ended on or before today (a week
+  ending today counts once today is marked).
+- Celebration: reuse the milestone overlay with "Perfect week" / "Perfect
+  month" and the tile line; one overlay per event, queued if several.
+- Display: a **Badges** row on the task screen under the stat tiles: two
+  pills, "✦ N perfect weeks" and "◆ N perfect months" (hidden at 0 each; the
+  row hidden if both are 0). Tapping a pill lists the dates in a small sheet.
+  On the year grid, a perfect month's label pill gets a subtle filled style.
+
+### Year in review (shareable image)
+- Task … menu → **Year in review** (also offered automatically in the task
+  menu from 15 December). Renders a 1080×1920 PNG on a canvas, client-side:
+  task icon + name in the task colour, the year, the year grid (same layout as
+  the Heatmap, 2 rows of weeks, lit/partial/frozen squares), and four stats:
+  days done, best streak, perfect weeks, perfect months, plus "Tessera" and
+  the site URL small at the bottom. Dark background, task colour accents.
+- Share with `navigator.share({ files: [png] })` when `navigator.canShare`
+  allows files; otherwise download `tessera-<task>-<year>.png`. Preview the
+  image in a sheet first with Share / Save and a year picker when the task has
+  more than one year.
