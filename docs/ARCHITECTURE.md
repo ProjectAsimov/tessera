@@ -282,3 +282,64 @@ task colour, not a gem emoji. Code identifiers (`gems`, `wallet.gems`) stay.
   allows files; otherwise download `tessera-<task>-<year>.png`. Preview the
   image in a sheet first with Share / Save and a year picker when the task has
   more than one year.
+
+## Slice C: notifications (Web Push)
+
+Opt-in only, controlled in Settings. Two kinds now (daily reminder, weekly
+recap); the same path carries coach→client pushes later.
+
+### Worker
+- VAPID: `VAPID_PUBLIC_KEY` as a var in wrangler.toml, `VAPID_PRIVATE_KEY` as
+  a secret, `VAPID_SUBJECT = mailto:tasktracker.support@gmail.com`. Generate
+  once with `scripts/vapid.mjs` (prints the public key; writes the private key
+  only to `C:\Users\User\.secrets\tasktracker\vapid-private.txt`, never stdout).
+- D1 table `push_subs(endpoint TEXT PRIMARY KEY, user_id, p256dh, auth, tz
+  TEXT, reminder_hour INTEGER NULL, weekly INTEGER NOT NULL DEFAULT 1,
+  last_reminder_day TEXT, last_weekly_day TEXT, created, failures INTEGER DEFAULT 0)`
+  via migration `004_push.sql` (+ schema.sql). Deleting an account deletes its subs.
+- Routes (session): `GET /push/key` → `{ publicKey }` (no session);
+  `POST /push/subscribe { subscription: PushSubscriptionJSON, tz, reminderHour, weekly }`
+  upserts by endpoint; `POST /push/prefs { endpoint, reminderHour|null, weekly }`;
+  `POST /push/unsubscribe { endpoint }`; `POST /push/test { endpoint }` sends a
+  "Notifications are on" push to that endpoint (rate-limit 1/min per user).
+- Cron trigger every 15 minutes (`[triggers] crons = ["*/15 * * * *"]`):
+  - **Daily reminder**: for each sub with `reminder_hour` set, compute the local
+    time from `tz`; if local hour == reminder_hour and `last_reminder_day` !=
+    local date: count the user's non-archived, non-deleted tasks with no `on`
+    entry for the local date; if > 0 send `{ title: "Tessera", body: "N tasks
+    left today" | "<name> left today", tag: "reminder", url: "/tessera/" }`;
+    set `last_reminder_day`.
+  - **Weekly recap**: Sundays at local 18:00 when `weekly=1` and
+    `last_weekly_day` != that date: days done this week (Mon–Sun, counting the
+    user's tasks) vs last week, best current streak; body like "This week: 11
+    days across 3 tasks (last week 9). Longest streak: Gym, 23 days."
+  - Send with RFC 8291 (aes128gcm) + VAPID (RFC 8292) using WebCrypto. Prefer
+    a small maintained Workers-compatible library if one exists; otherwise
+    implement it in `src/lib/webpush.ts`. On 404/410 delete the sub; on other
+    failures increment `failures` and drop the sub after 5.
+- Account deletion removes the user's push subs.
+
+### App
+- `public/push-sw.js` imported by the generated service worker (vite-plugin-pwa
+  `workbox.importScripts`): `push` shows the notification (title, body, icon
+  `/tessera/icon-192.png`, badge, tag, `data.url`), `notificationclick` focuses
+  or opens `data.url`.
+- Settings → **Notifications** section (only when signed in): "Daily reminder"
+  toggle + time picker (hour, default 19:00), "Weekly recap" toggle, status
+  line (permission state; "blocked in system settings" when denied), and a
+  "Send a test" link. Turning anything on requests permission, subscribes with
+  the VAPID key, posts to `/push/subscribe` with `Intl.DateTimeFormat().resolvedOptions().timeZone`.
+  Turning both off unsubscribes. Prefs stored locally (`tt.push`) and on the server.
+- Status line on Home mentions nothing about push; keep it quiet.
+
+### Android
+- `twa-manifest.json`: `enableNotifications: true` (notification delegation so
+  pushes show as the app's), `appVersionCode: 2`, `appVersionName: 1.1.0`.
+  Bubblewrap adds the delegation and `POST_NOTIFICATIONS`. New internal release.
+
+### Compliance
+- Notifications are opt-in and cancellable in Settings (Play policy). The
+  privacy policy gains: push subscription (an endpoint URL and two keys
+  issued by the browser's push service, plus the time zone and reminder hour),
+  kept until turned off or the account is deleted. Data safety: no new category
+  beyond "app functionality"; the time zone is not location.
