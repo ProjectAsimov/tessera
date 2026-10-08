@@ -210,3 +210,44 @@ All free; gems are earned only (no Play billing involved).
 - Leaderboard rows: 🔥 button (disabled after use today) with the received count;
   "🤝 N" friend streak next to the name when N > 0.
 - Mock API implements all of it (including shout/friend/board fields).
+
+## Slice A.1: Play compliance (account deletion, report/block, terms, naming)
+
+Driven by docs/compliance/2026-10-07-internal-testing.md.
+
+### Naming
+The earned currency is called **tiles** everywhere the user can see it (UI
+copy, store listing, privacy policy); the icon is a small lit square in the
+task colour, not a gem emoji. Code identifiers (`gems`, `wallet.gems`) stay.
+
+### Account deletion
+- `DELETE /me` (session required): deletes, in one D1 batch, the caller's
+  shoutouts (sent and received), blocks, reports, memberships, entries, tasks,
+  and for groups the caller hosts: the group, all its memberships, and clears
+  `group_id` on the other members' tasks. Then deletes the `users` row, the
+  current session, and writes KV `del:<sub>` (90-day TTL). `requireSession`
+  returns 401 for any session whose `sub` has a `del:` marker, so other devices'
+  sessions die too. Returns `{ ok: true }`.
+- App: Settings → Account → **Delete account** → confirm sheet (what is deleted,
+  irreversible) → call → clear local state and session → toast. Also a
+  **Privacy policy** link and a **Community guidelines** link in Settings.
+- Web: `https://projectasimov.github.io/delete.html` explains the in-app path
+  and the email route for users who uninstalled.
+
+### Report and block
+- D1 tables: `blocks(user_id, blocked_id, created, PRIMARY KEY(user_id, blocked_id))`,
+  `reports(id, group_id, reporter_id, reported_id, reason, created)`.
+- `POST /groups/:id/block { userId }` / `POST /groups/:id/unblock { userId }`
+  (member only; cannot block self). `GET /me/blocks` → `{ userIds: [] }`.
+- `POST /groups/:id/report { userId, reason }` (reason ≤ 500 chars; member
+  only) → `{ ok: true }`. Reports are stored for us to action;
+  `worker/scripts/reports.mjs` lists them (`--remote`).
+- Board: members the caller has blocked are omitted from the caller's board;
+  a blocked member's shoutouts to the caller are rejected with 403 and never
+  counted; the caller's shoutouts to someone who blocked them are rejected 403.
+- App: the members sheet is available to every member (host keeps Remove);
+  each other member's row has **Report** (reason sheet with a short text field)
+  and **Block / Unblock**. Blocked members disappear from the caller's board.
+- Join sheet and Share sheet carry one line: "Members see each other's names,
+  streaks and shoutouts. By joining you agree to the community guidelines."
+  linking to `https://projectasimov.github.io/guidelines.html`.
