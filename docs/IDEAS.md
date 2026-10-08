@@ -153,8 +153,8 @@ blogs rather than papers.
 
 - `[shipped]` Flame border, milestone animation, multi-event tasks (70% rule, gradient
   fill), earned-only tiles, streak freeze + repair, shoutouts, friend streaks.
-- `[in progress]` Compliance slice A.1: account deletion, report/block, terms, tiles naming.
-- `[planned next]` Badges (perfect week / perfect month), year in review with share image.
+- `[shipped]` Compliance slice A.1: account deletion, report/block, terms, tiles naming.
+- `[shipped]` Badges (perfect week / perfect month), year in review with share image.
 - `[later]` Push notifications (reminders, weekly recap, manager → client), coach tier,
   native layer for widgets + watch, mascot (snow leopard), rewarded ads (only if tiles
   ever become scarce enough to want them).
