@@ -9,7 +9,7 @@ interface Props {
   y: number;
   m: number;
   entries: DayMap | undefined;
-  /** A missed day that costs gems to fill (a gap in a streak, last 7 days). */
+  /** A missed day that costs tiles to fill (a gap in a streak, last 7 days). */
   canRepair?: (day: string) => boolean;
   onRepair?: (day: string) => void;
   onToggle: (day: string) => void;
@@ -99,7 +99,7 @@ export function MonthCalendar({ y, m, entries, canRepair, onRepair, onToggle, on
         data-day={k}
         class={['c', on && 'on', kind && 'fz', repair && 'rp', k === t && 'today-cell', future && 'future', sel && (range!.on ? 'sel-on' : 'sel-off')].filter(Boolean).join(' ')}
         disabled={future}
-        aria-label={`${MONTHS[m]} ${d}${on ? ', ' + (kind === 1 ? 'frozen' : kind === 2 ? 'repaired' : doneWord) : ''}${repair ? ', missed. Repair with gems' : ''}`}
+        aria-label={`${MONTHS[m]} ${d}${on ? ', ' + (kind === 1 ? 'frozen' : kind === 2 ? 'repaired' : doneWord) : ''}${repair ? ', missed. Repair with tiles' : ''}`}
         aria-pressed={on}
         onPointerDown={onDown}
         onPointerMove={onMove}
@@ -128,7 +128,7 @@ export function MonthCalendar({ y, m, entries, canRepair, onRepair, onToggle, on
         <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
       </div>
       <div class="cal">{cells}</div>
-      <p class="hint">Tap a day to mark or unmark it. Press and slide to do a whole stretch at once. A missed day inside a streak can be repaired for gems.</p>
+      <p class="hint">Tap a day to mark or unmark it. Press and slide to do a whole stretch at once. A missed day inside a streak can be repaired for tiles.</p>
     </Card>
   );
 }

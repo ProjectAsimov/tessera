@@ -69,3 +69,11 @@ textarea.io {
 .empty h2 { color: var(--text); font-size: 20px; margin: 0 0 6px; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* The earned currency ("tiles"): a small lit square, in the current accent / task colour. */
+.tile-ico { display: inline-block; width: .8em; height: .8em; background: var(--lit); border-radius: 2px; vertical-align: -0.04em; }
+.legal-links { display: flex; gap: 16px; flex-wrap: wrap; margin: 4px 0 0; }
+.legal-links a { font-size: 13px; color: var(--muted); text-decoration: underline; }
+.terms { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 10px 0 0; }
+.terms a { color: var(--muted); text-decoration: underline; }
+.sheet-label.danger-label { color: var(--danger); }

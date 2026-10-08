@@ -24,7 +24,7 @@ npx wrangler d1 execute tasktracker --remote --file src/db/schema.sql
 npx wrangler deploy
 ```
 
-Upgrading an existing database (adds the Slice A columns and `shoutouts`; safe to re-run, skips what exists):
+Upgrading an existing database (runs migrations 002 and 003: Slice A columns and `shoutouts`, Slice A.1 `blocks` and `reports`; safe to re-run, skips what exists):
 
 ```
 node scripts/migrate.mjs --local
@@ -46,6 +46,8 @@ All bodies and responses are JSON. Session routes take `Authorization: Bearer <s
 | `GET /auth/callback` | – | 302 back to the app with `#session=<token>`, or `#auth=failed` / `#auth=cancelled` |
 | `POST /auth/logout` | – | `{ ok: true }` and deletes the session |
 | `GET /me` | – | `{ id, name, email }` |
+| `DELETE /me` | – | `{ ok: true }` — deletes the caller's shoutouts, blocks, reports, memberships, entries and tasks; dissolves groups they host (other members' tasks get `groupId: null`); deletes the user row and session; writes KV `del:<sub>` (90 days) so the caller's sessions on other devices return 401 |
+| `GET /me/blocks` | – | `{ userIds: string[] }` — users the caller has blocked |
 | `POST /sync` | `{ tasks: Task[], entries: Entry[], wallet?: Wallet }` — local changes since the last sync. `Task.target` 1-20 (default 1); `Entry.n` 0-999 (default `on`), `Entry.kind` 0 normal / 1 freeze / 2 repair (default 0); `wallet` = `{ gems 0-1e6, freezes 0-2, milestones: string[] (<= 2000), updated: ms }` | `{ tasks, entries, wallet, now }` — full state after merging (tasks: newest `updated` wins; entries: newest `t` wins; wallet: newest `updated` wins, default `{gems:0,freezes:0,milestones:[],updated:0}`) |
 | `POST /groups` | `{ taskId }` — caller's own, non-deleted, ungrouped task | `{ group, task }` — task now has `groupId`; caller becomes host and first member |
 | `GET /groups/preview?code=<inviteCode>` | – (no session needed) | `{ name, hostName, members, memberLimit }` or 404 |
@@ -54,3 +56,8 @@ All bodies and responses are JSON. Session routes take `Authorization: Bearer <s
 | `POST /groups/:id/shout?today=YYYY-MM-DD` | `{ userId }` (member -> another member; `today` may also be in the body) | `{ ok: true, count }` — `count` = shoutouts the target received in the last 7 days; 409 `already today` for a repeat on the same day; 400 self; 404 target not a member; 403 caller not a member |
 | `POST /groups/:id/leave` | – (member, not host) | `{ ok: true }` — membership removed, task's `groupId` cleared |
 | `POST /groups/:id/remove` | `{ userId }` (host only) | `{ ok: true }` — same as leave, for that member |
+| `POST /groups/:id/block` | `{ userId }` (member; another member) | `{ ok: true }` — the target disappears from the caller's board; shoutouts either way between the two are 403; 400 self; 404 target not a member |
+| `POST /groups/:id/unblock` | `{ userId }` (member) | `{ ok: true }` — idempotent |
+| `POST /groups/:id/report` | `{ userId, reason }` (member; `reason` 1-500 chars) | `{ ok: true }` — stored in `reports`; 400 self / bad reason; 404 target not a member; 403 caller not a member |
+
+Blocks are global per user (not per group). List reports with `node scripts/reports.mjs --local|--remote`.

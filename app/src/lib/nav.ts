@@ -7,7 +7,7 @@ export type Screen =
   | { name: 'task'; taskId: string }
   | { name: 'month'; taskId: string; y: number; m: number };
 
-export type Sheet = 'settings' | 'welcome' | 'add' | 'edit' | 'menu' | 'share' | 'members' | 'join' | 'repair' | null;
+export type Sheet = 'settings' | 'welcome' | 'add' | 'edit' | 'menu' | 'share' | 'members' | 'join' | 'repair' | 'report' | 'delete' | null;
 
 interface NavState { screens: Screen[]; sheet: Sheet }
 
@@ -90,6 +90,24 @@ export function leaveTask(taskId: string): void {
     if (sc.name !== 'home' && sc.taskId === taskId) n++; else break;
   }
   if (n) history.go(-n);
+}
+
+/** Back to a bare home screen: pops every screen and `sheetDepth` stacked sheets. */
+export function resetToHome(sheetDepth: number): void {
+  const n = screens.value.length - 1 + sheetDepth;
+  const home: NavState = { screens: [{ name: 'home' }], sheet: null };
+  if (n > 0) {
+    // The entry we land on can be a stale one (e.g. a sheet that was replaced by a screen push); overwrite it.
+    window.addEventListener('popstate', () => { history.replaceState(home, ''); apply(home); }, { once: true });
+    history.go(-n);
+  } else apply(home);
+}
+
+/** Drops the open sheet from the current history entry (no extra entry), so a following push() leaves no stale sheet behind. */
+export function dropSheet(): void {
+  if (!sheet.value) return;
+  history.replaceState({ screens: screens.value, sheet: null } satisfies NavState, '');
+  sheet.value = null;
 }
 
 export function startNav(): void {

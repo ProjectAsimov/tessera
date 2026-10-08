@@ -1,5 +1,5 @@
 import { todayIso } from '../lib/dates';
-import type { Me, SyncRequest, SyncResponse, ApiError, GroupPreview, GroupBoard, GroupAndTask, ShoutResult } from './types';
+import type { Me, SyncRequest, SyncResponse, ApiError, GroupPreview, GroupBoard, GroupAndTask, ShoutResult, MyBlocks } from './types';
 
 export const API_URL: string = (import.meta.env.VITE_API_URL as string | undefined) || 'https://tasktracker-sync.projectasimov.workers.dev';
 export const MOCK: boolean = import.meta.env.VITE_MOCK_API === '1';
@@ -27,6 +27,12 @@ export interface Api {
   removeMember(token: string, groupId: string, userId: string): Promise<void>;
   // Slice A: shoutouts.
   shout(token: string, groupId: string, userId: string): Promise<ShoutResult>;
+  // Slice A.1: account deletion, report and block.
+  deleteAccount(token: string): Promise<void>;
+  myBlocks(token: string): Promise<MyBlocks>;
+  block(token: string, groupId: string, userId: string): Promise<void>;
+  unblock(token: string, groupId: string, userId: string): Promise<void>;
+  report(token: string, groupId: string, userId: string, reason: string): Promise<void>;
 }
 
 async function request<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
@@ -65,6 +71,11 @@ const fetchApi: Api = {
   removeMember: async (token, groupId, userId) => { await request<{ ok: true }>(`/groups/${groupId}/remove`, token, { method: 'POST', body: JSON.stringify({ userId }) }); },
   // `today` is the client's local date: "one shoutout per day" follows the user's day, not the server's.
   shout: (token, groupId, userId) => request<ShoutResult>(`/groups/${groupId}/shout`, token, { method: 'POST', body: JSON.stringify({ userId, today: todayIso() }) }),
+  deleteAccount: async (token) => { await request<{ ok: true }>('/me', token, { method: 'DELETE' }); },
+  myBlocks: (token) => request<MyBlocks>('/me/blocks', token),
+  block: async (token, groupId, userId) => { await request<{ ok: true }>(`/groups/${groupId}/block`, token, { method: 'POST', body: JSON.stringify({ userId }) }); },
+  unblock: async (token, groupId, userId) => { await request<{ ok: true }>(`/groups/${groupId}/unblock`, token, { method: 'POST', body: JSON.stringify({ userId }) }); },
+  report: async (token, groupId, userId, reason) => { await request<{ ok: true }>(`/groups/${groupId}/report`, token, { method: 'POST', body: JSON.stringify({ userId, reason }) }); },
 };
 
 let impl: Api = fetchApi;
@@ -85,4 +96,9 @@ export const api: Api = {
   leaveGroup: (t, g) => impl.leaveGroup(t, g),
   removeMember: (t, g, u) => impl.removeMember(t, g, u),
   shout: (t, g, u) => impl.shout(t, g, u),
+  deleteAccount: (t) => impl.deleteAccount(t),
+  myBlocks: (t) => impl.myBlocks(t),
+  block: (t, g, u) => impl.block(t, g, u),
+  unblock: (t, g, u) => impl.unblock(t, g, u),
+  report: (t, g, u, r) => impl.report(t, g, u, r),
 };

@@ -10,7 +10,9 @@ import { exportBackup, importBackup, eraseAll, tasks, wallet } from '../model/st
 import { REPAIR_COST } from '../model/rewards';
 import { showArchived, setShowArchived } from '../lib/prefs';
 import { MOCK } from '../model/api';
-import { closeSheet } from '../lib/nav';
+import { closeSheet, openSheet, sheet } from '../lib/nav';
+import { GUIDELINES_URL, PRIVACY_URL } from '../components/Terms';
+import { deleteAccount } from '../model/account';
 import './Settings.css';
 
 const MODES: ReadonlyArray<{ value: Mode; label: string }> = [
@@ -21,6 +23,8 @@ const ON_OFF = [{ value: '1', label: 'On' }, { value: '0', label: 'Off' }] as co
 export function Settings({ open }: { open: boolean }) {
   const [io, setIo] = useState('');
   const [note, setNote] = useState('');
+  const [typed, setTyped] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const s = session.value;
   const on = syncOn.value;
 
@@ -56,7 +60,16 @@ export function Settings({ open }: { open: boolean }) {
     setNote('Erased.');
   };
 
+  const startDelete = () => { setTyped(''); setDeleting(false); openSheet('delete'); };
+  const confirmDelete = async () => {
+    if (deleting || typed.trim().toLowerCase() !== 'delete') return;
+    setDeleting(true);
+    const ok = await deleteAccount();
+    if (!ok) setDeleting(false);
+  };
+
   return (
+    <>
     <Sheet open={open} onClose={closeSheet} title="Settings" labelledBy="settingsTitle">
       <p class="sheet-label">Account</p>
       <p class="acct">
@@ -67,8 +80,13 @@ export function Settings({ open }: { open: boolean }) {
         <div class="row">
           {on && <Button onClick={() => { void sync(); }}>Sync now</Button>}
           <Button warn onClick={doSignOut}>Sign out</Button>
+          <Button warn onClick={startDelete}>Delete account</Button>
         </div>
       )}
+      <p class="legal-links">
+        <a href={PRIVACY_URL} target="_blank" rel="noopener">Privacy policy</a>
+        <a href={GUIDELINES_URL} target="_blank" rel="noopener">Community guidelines</a>
+      </p>
 
       {s && (
         <>
@@ -82,11 +100,11 @@ export function Settings({ open }: { open: boolean }) {
 
       <p class="sheet-label">Wallet</p>
       <div class="wallet-row">
-        <span class="wallet-chip"><b>{'💎'} {wallet.value.gems}</b> gems</span>
+        <span class="wallet-chip"><b><span class="tile-ico" aria-hidden="true" /> {wallet.value.gems}</b> tiles</span>
         <span class="wallet-chip"><b>{'❄'}×{wallet.value.freezes}</b> streak freezes</span>
       </div>
       <p class="acct" style={{ marginTop: 8 }}>
-        Gems are earned by reaching a streak of 7, 30, 100 or 365 days, and by setting a new best streak of 7 or more. Every 14 days of a streak banks a streak freeze (up to 2). A freeze covers yesterday for you if you missed it. A gem repair ({REPAIR_COST} gems) fills a missed day inside a streak, from a task's month view.
+        Tiles are earned by reaching a streak of 7, 30, 100 or 365 days, and by setting a new best streak of 7 or more. Every 14 days of a streak banks a streak freeze (up to 2). A freeze covers yesterday for you if you missed it. A tile repair ({REPAIR_COST} tiles) fills a missed day inside a streak, from a task's month view.
       </p>
 
       <p class="sheet-label">Mode</p>
@@ -119,5 +137,30 @@ export function Settings({ open }: { open: boolean }) {
         <div class="note">{note}</div>
       </details>
     </Sheet>
+
+    <Sheet open={sheet.value === 'delete'} onClose={closeSheet} title="Delete account" labelledBy="deleteTitle" doneLabel="Cancel">
+      <p class="acct">This permanently deletes:</p>
+      <ul class="del-list">
+        <li>your tasks, days and tiles</li>
+        <li>groups you host, for everyone in them</li>
+        <li>your membership in other people's groups</li>
+      </ul>
+      <p class="acct">It happens on every device you are signed in on, and <b>it cannot be undone</b>.</p>
+      <label class="sheet-label danger-label" for="delConfirm">Type DELETE to confirm</label>
+      <input
+        id="delConfirm"
+        class="field"
+        type="text"
+        autocomplete="off"
+        autocapitalize="characters"
+        spellcheck={false}
+        value={typed}
+        onInput={(e) => setTyped((e.currentTarget as HTMLInputElement).value)}
+      />
+      <div class="row">
+        <Button warn disabled={deleting || typed.trim().toLowerCase() !== 'delete'} onClick={() => { void confirmDelete(); }}>{deleting ? 'Deleting…' : 'Delete my account'}</Button>
+      </div>
+    </Sheet>
+    </>
   );
 }

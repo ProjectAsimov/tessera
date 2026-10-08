@@ -20,3 +20,11 @@
 .today.multi.done .step { background: var(--lit-soft); color: var(--lit); }
 .today.multi .step:disabled { opacity: 0.35; cursor: default; }
 .today.multi .step:not(:disabled):active { transform: scale(0.94); }
+
+.member-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.member-name { flex: 1; }
+.member-actions { display: flex; gap: 6px; flex: none; }
+.member-row { flex-wrap: wrap; }
+.report-text { width: 100%; min-height: 96px; resize: vertical; font: inherit; box-sizing: border-box; }
+.report-count { text-align: right; font-size: 12px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.report-count.over { color: var(--danger); font-weight: 700; }

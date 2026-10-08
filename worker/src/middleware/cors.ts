@@ -8,7 +8,7 @@ export function allowedOrigins(env: Env): string[] {
 export function corsHeaders(req: Request, env: Env): Record<string, string> {
   const origin = req.headers.get('Origin') || '';
   const h: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Authorization, Content-Type',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',

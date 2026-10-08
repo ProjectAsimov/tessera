@@ -99,6 +99,7 @@ export interface GroupAndTask {
 export interface Me { id: string; name: string; email: string }
 export interface SyncRequest { tasks: Task[]; entries: Entry[]; wallet?: Wallet }
 export interface SyncResponse { tasks: Task[]; entries: Entry[]; wallet: Wallet; now: number }
+export interface MyBlocks { userIds: string[] }
 export interface ShoutResult { ok: true; count: number }
 export interface ApiError { error: string }
 

@@ -1,7 +1,7 @@
 import { json, readJson } from '../lib/json';
-import { isObject, validateCode, validateTaskId, validateToday, validateUserId } from '../lib/validate';
+import { isObject, validateCode, validateTaskId, validateReason, validateToday, validateUserId } from '../lib/validate';
 import { requireSession } from '../middleware/auth';
-import { createGroup, getBoard, joinGroup, leaveGroup, previewGroup, removeMember, shout } from '../services/groups';
+import { blockMember, createGroup, getBoard, joinGroup, leaveGroup, previewGroup, removeMember, reportMember, shout, unblockMember } from '../services/groups';
 import type { Ctx } from '../types';
 
 export async function createGroupRoute(ctx: Ctx): Promise<Response> {
@@ -54,4 +54,27 @@ export async function shoutRoute(ctx: Ctx, groupId: string): Promise<Response> {
   const today = validateToday(ctx.url.searchParams.get('today') ?? (isObject(body) ? body.today : undefined));
   const result = await shout(ctx.env, groupId, s.sub, userId, today);
   return json(result, 200, ctx.cors);
+}
+
+export async function blockRoute(ctx: Ctx, groupId: string): Promise<Response> {
+  const s = await requireSession(ctx);
+  const body = await readJson(ctx.req);
+  await blockMember(ctx.env, groupId, s.sub, validateUserId(isObject(body) ? body.userId : undefined));
+  return json({ ok: true }, 200, ctx.cors);
+}
+
+export async function unblockRoute(ctx: Ctx, groupId: string): Promise<Response> {
+  const s = await requireSession(ctx);
+  const body = await readJson(ctx.req);
+  await unblockMember(ctx.env, groupId, s.sub, validateUserId(isObject(body) ? body.userId : undefined));
+  return json({ ok: true }, 200, ctx.cors);
+}
+
+export async function reportRoute(ctx: Ctx, groupId: string): Promise<Response> {
+  const s = await requireSession(ctx);
+  const body = await readJson(ctx.req);
+  const userId = validateUserId(isObject(body) ? body.userId : undefined);
+  const reason = validateReason(isObject(body) ? body.reason : undefined);
+  await reportMember(ctx.env, groupId, s.sub, userId, reason);
+  return json({ ok: true }, 200, ctx.cors);
 }

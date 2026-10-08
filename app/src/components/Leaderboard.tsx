@@ -53,9 +53,8 @@ export function Leaderboard({ group, members, isHost, onInvite, onLeave, onManag
       </ol>
       <div class="row">
         <Button onClick={onInvite}>Invite</Button>
-        {isHost
-          ? <Button onClick={onManage}>Manage members</Button>
-          : <Button warn onClick={onLeave}>Leave</Button>}
+        <Button onClick={onManage}>Members</Button>
+        {!isHost && <Button warn onClick={onLeave}>Leave</Button>}
       </div>
     </div>
   );

@@ -93,6 +93,7 @@ export async function sync(): Promise<void> {
   const snapshot = store.changeSeq();
   try {
     const res = await api.sync(token, pendingBody(legacy));
+    if (session.value?.token !== token) return; // signed out or account deleted while in flight
     if (legacy) {
       if (reconcileLegacy(res.tasks, res.entries, snapshot, res.wallet)) { queueSync(); }
       else { store.replaceFromServer(res.tasks, res.entries, snapshot, res.wallet); queueSync(); }

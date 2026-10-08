@@ -218,11 +218,18 @@ export async function insertShout(db: D1Database, groupId: string, fromId: strin
   return (r.meta.changes ?? 0) > 0;
 }
 
-/** Shoutouts received per user in the group on or after `sinceDay`. */
-export async function shoutsReceived(db: D1Database, groupId: string, sinceDay: string): Promise<Map<string, number>> {
+/**
+ * Shoutouts received per user in the group on or after `sinceDay`, as the viewer sees them:
+ * shoutouts from people the viewer has blocked are not counted.
+ */
+export async function shoutsReceived(db: D1Database, groupId: string, sinceDay: string, viewerId: string): Promise<Map<string, number>> {
   const { results } = await db
-    .prepare('SELECT to_id, COUNT(*) AS n FROM shoutouts WHERE group_id = ? AND day >= ? GROUP BY to_id')
-    .bind(groupId, sinceDay)
+    .prepare(
+      `SELECT to_id, COUNT(*) AS n FROM shoutouts
+       WHERE group_id = ?1 AND day >= ?2 AND from_id NOT IN (SELECT blocked_id FROM blocks WHERE user_id = ?3)
+       GROUP BY to_id`,
+    )
+    .bind(groupId, sinceDay, viewerId)
     .all<{ to_id: string; n: number }>();
   return new Map(results.map((r) => [r.to_id, r.n]));
 }
@@ -234,4 +241,65 @@ export async function shoutedOn(db: D1Database, groupId: string, fromId: string,
     .bind(groupId, fromId, day)
     .all<{ to_id: string }>();
   return new Set(results.map((r) => r.to_id));
+}
+
+// --- blocks and reports (Slice A.1) ---
+
+export function insertBlockStmt(db: D1Database, userId: string, blockedId: string): D1PreparedStatement {
+  return db
+    .prepare('INSERT OR IGNORE INTO blocks (user_id, blocked_id, created) VALUES (?1, ?2, ?3)')
+    .bind(userId, blockedId, Date.now());
+}
+
+export function deleteBlockStmt(db: D1Database, userId: string, blockedId: string): D1PreparedStatement {
+  return db.prepare('DELETE FROM blocks WHERE user_id = ? AND blocked_id = ?').bind(userId, blockedId);
+}
+
+/** Ids the user has blocked. */
+export async function blockedBy(db: D1Database, userId: string): Promise<string[]> {
+  const { results } = await db
+    .prepare('SELECT blocked_id FROM blocks WHERE user_id = ? ORDER BY created')
+    .bind(userId)
+    .all<{ blocked_id: string }>();
+  return results.map((r) => r.blocked_id);
+}
+
+/** True when either user has blocked the other. */
+export async function blockedEitherWay(db: D1Database, a: string, b: string): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT 1 FROM blocks WHERE (user_id = ?1 AND blocked_id = ?2) OR (user_id = ?2 AND blocked_id = ?1)')
+    .bind(a, b)
+    .first();
+  return row != null;
+}
+
+export async function insertReport(
+  db: D1Database, groupId: string, reporterId: string, reportedId: string, reason: string,
+): Promise<void> {
+  await db
+    .prepare('INSERT INTO reports (id, group_id, reporter_id, reported_id, reason, created) VALUES (?1, ?2, ?3, ?4, ?5, ?6)')
+    .bind(crypto.randomUUID(), groupId, reporterId, reportedId, reason, Date.now())
+    .run();
+}
+
+/**
+ * Everything that belongs to `userId`, as one batch (account deletion). Order matters
+ * for the foreign keys: memberships and entries go before tasks, tasks before the user.
+ * Groups the user hosts are dissolved: other members keep their tasks with `group_id`
+ * cleared (and `updated` bumped so the change reaches their devices).
+ */
+export function deleteAccountStmts(db: D1Database, userId: string, now: number): D1PreparedStatement[] {
+  const hosted = 'SELECT id FROM groups WHERE host_id = ?1';
+  const q = (sql: string) => db.prepare(sql).bind(userId);
+  return [
+    q('DELETE FROM shoutouts WHERE from_id = ?1 OR to_id = ?1 OR group_id IN (' + hosted + ')'),
+    q('DELETE FROM blocks WHERE user_id = ?1 OR blocked_id = ?1'),
+    q('DELETE FROM reports WHERE reporter_id = ?1 OR reported_id = ?1'),
+    db.prepare(`UPDATE tasks SET group_id = NULL, updated = ?2 WHERE owner_id != ?1 AND group_id IN (${hosted})`).bind(userId, now),
+    q(`DELETE FROM memberships WHERE user_id = ?1 OR group_id IN (${hosted})`),
+    q('DELETE FROM groups WHERE host_id = ?1'),
+    q('DELETE FROM entries WHERE task_id IN (SELECT id FROM tasks WHERE owner_id = ?1)'),
+    q('DELETE FROM tasks WHERE owner_id = ?1'),
+    q('DELETE FROM users WHERE id = ?1'),
+  ];
 }

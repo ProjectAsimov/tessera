@@ -38,6 +38,8 @@ interface GroupRow { id: string; name: string; hostId: string; inviteCode: strin
 interface Membership { taskId: string; joined: number }
 
 const BUDDY = { id: 'mock-sub-2', name: 'Alex Kim' };
+/** A third person, only in the seeded known group, so there is someone to block while others remain. */
+const SAM = { id: 'mock-sub-3', name: 'Sam Rivera' };
 /** A known, stable invite code for exercising the join flow in dev (`?join=mockjoin01`). */
 export const KNOWN_JOIN_CODE = 'mockjoin01';
 
@@ -48,7 +50,7 @@ const buddyTasks = new Map<string, Task>();
 const buddyEntries = new Map<string, Entry>(); // "taskId|day"
 
 function nameOf(userId: string): string {
-  return userId === USER.id ? USER.name : userId === BUDDY.id ? BUDDY.name : 'Member';
+  return userId === USER.id ? USER.name : userId === BUDDY.id ? BUDDY.name : userId === SAM.id ? SAM.name : 'Member';
 }
 
 function genCode(): string {
@@ -68,11 +70,11 @@ function isoOf(d: Date): string {
 }
 
 /** Adds Alex Kim as a second member of `groupId`, with a cloned task and a plausible history. */
-function addBuddyToGroup(groupId: string, name: string, color: ColorId, icon: IconId): void {
-  const taskId = 'buddy-task-' + groupId;
+function addBuddyToGroup(groupId: string, name: string, color: ColorId, icon: IconId, who: { id: string; name: string } = BUDDY): void {
+  const taskId = (who === SAM ? 'sam-task-' : 'buddy-task-') + groupId;
   const now = Date.now();
-  buddyTasks.set(taskId, { id: taskId, ownerId: BUDDY.id, name, color, icon, archived: 0, groupId, created: now - 1, updated: now - 1, deleted: 0, target: 1 });
-  const r = rng(groupId.length + 11);
+  buddyTasks.set(taskId, { id: taskId, ownerId: who.id, name, color, icon, archived: 0, groupId, created: now - 1, updated: now - 1, deleted: 0, target: 1 });
+  const r = rng(groupId.length + 11 + (who === SAM ? 5 : 0));
   const today = new Date();
   for (let i = 1; i <= 60; i++) {
     const d = new Date(today);
@@ -85,9 +87,15 @@ function addBuddyToGroup(groupId: string, name: string, color: ColorId, icon: Ic
     buddyEntries.set(taskId + '|' + isoOf(d), { taskId, day: isoOf(d), on: 1, t: now - i * 1000, n: 1, kind: 0 });
   }
   const m = memberships.get(groupId) ?? new Map<string, Membership>();
-  m.set(BUDDY.id, { taskId, joined: now - 86400000 * 5 });
+  m.set(who.id, { taskId, joined: now - 86400000 * 5 });
   memberships.set(groupId, m);
 }
+
+// Slice A.1: whom the (single) mock caller has blocked, and who has blocked the caller.
+const blocks = new Set<string>();
+export const blockedByOthers = new Set<string>();
+const reports: Array<{ groupId: string; reporterId: string; reportedId: string; reason: string; created: number }> = [];
+export const mockReports = reports;
 
 // Shoutouts, keyed "groupId|from|to|day". A few are seeded so counts show in dev.
 const shouts = new Set<string>();
@@ -154,6 +162,7 @@ function memberStats(userId: string, taskId: string, today: string): Omit<Member
   groups.set(id, { id, name: 'Morning Pages', hostId: BUDDY.id, inviteCode: KNOWN_JOIN_CODE, memberLimit: 50, created: Date.now() - 86400000 * 20 });
   groupMeta.set(id, { color: 'blue', icon: 'pen' });
   addBuddyToGroup(id, 'Morning Pages', 'blue', 'pen');
+  addBuddyToGroup(id, 'Morning Pages', 'blue', 'pen', SAM);
   seedShouts(id);
 })();
 
@@ -255,6 +264,7 @@ export const mockApi: Api = {
     const myTask = m.get(USER.id)!.taskId;
     const mine = onDays(entryMapOf(USER.id, myTask));
     for (const [userId, mem] of m) {
+      if (blocks.has(userId)) continue; // blocked members never appear on the caller's board
       const stats = memberStats(userId, mem.taskId, today);
       if (!stats) continue;
       members.push({
@@ -275,11 +285,75 @@ export const mockApi: Api = {
     const m = groupId ? memberships.get(groupId) : undefined;
     if (!m || !m.has(USER.id) || !m.has(userId)) throw new HttpError(404, 'not found');
     if (userId === USER.id) throw new HttpError(400, 'cannot shout yourself');
+    if (blocks.has(userId) || blockedByOthers.has(userId)) throw new HttpError(403, 'blocked');
     const day = isoOf(new Date());
     const key = [groupId, USER.id, userId, day].join('|');
     if (shouts.has(key)) throw new HttpError(409, 'already today');
     shouts.add(key);
     return { ok: true, count: receivedShouts(groupId, userId, day) };
+  },
+
+  async deleteAccount(token) {
+    await delay(300);
+    auth(token);
+    for (const [gid, g] of Array.from(groups)) {
+      if (g.hostId === USER.id) {
+        // Hosted groups go entirely; other members' tasks lose their group.
+        for (const [uid, mem] of memberships.get(gid) ?? []) {
+          if (uid === USER.id) continue;
+          const bt = buddyTasks.get(mem.taskId);
+          if (bt) buddyTasks.set(bt.id, { ...bt, groupId: undefined });
+        }
+        memberships.delete(gid);
+        groups.delete(gid);
+        groupMeta.delete(gid);
+      } else {
+        memberships.get(gid)?.delete(USER.id);
+      }
+    }
+    for (const k of Array.from(shouts)) {
+      const [, from, to] = k.split('|');
+      if (from === USER.id || to === USER.id) shouts.delete(k);
+    }
+    serverTasks.clear();
+    serverEntries.clear();
+    blocks.clear();
+    reports.splice(0, reports.length, ...reports.filter((r) => r.reporterId !== USER.id && r.reportedId !== USER.id));
+    serverWallet = { gems: 0, freezes: 0, milestones: [], updated: 0 };
+    // Every session dies; the mock can always sign back in, as a brand-new account.
+    sessions = new Set<string>([MOCK_TOKEN]);
+  },
+
+  async myBlocks(token) {
+    await delay(80);
+    auth(token);
+    return { userIds: Array.from(blocks) };
+  },
+
+  async block(token, groupId, userId) {
+    await delay(150);
+    auth(token);
+    const m = memberships.get(groupId);
+    if (!m || !m.has(USER.id) || !m.has(userId)) throw new HttpError(404, 'not found');
+    if (userId === USER.id) throw new HttpError(400, 'cannot block yourself');
+    blocks.add(userId);
+  },
+
+  async unblock(token, groupId, userId) {
+    await delay(150);
+    auth(token);
+    const m = memberships.get(groupId);
+    if (!m || !m.has(USER.id)) throw new HttpError(404, 'not found');
+    blocks.delete(userId);
+  },
+
+  async report(token, groupId, userId, reason) {
+    await delay(200);
+    auth(token);
+    const m = memberships.get(groupId);
+    if (!m || !m.has(USER.id) || !m.has(userId)) throw new HttpError(404, 'not found');
+    if (typeof reason !== 'string' || !reason.trim() || reason.length > 500) throw new HttpError(400, 'bad reason');
+    reports.push({ groupId, reporterId: USER.id, reportedId: userId, reason, created: Date.now() });
   },
 
   async leaveGroup(token, groupId) {

@@ -116,3 +116,12 @@ function isInt(v: unknown, min: number, max: number): v is number {
 function flag(v: unknown): 0 | 1 {
   return v ? 1 : 0;
 }
+
+export const MAX_REASON = 500;
+
+export function validateReason(v: unknown): string {
+  if (typeof v !== 'string') throw new HttpError(400, 'reason invalid');
+  const r = v.trim();
+  if (r.length < 1 || r.length > MAX_REASON) throw new HttpError(400, `reason must be 1-${MAX_REASON} characters`);
+  return r;
+}

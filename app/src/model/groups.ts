@@ -6,7 +6,7 @@ import { session } from './session';
 import { sync } from './sync';
 import * as store from './store';
 import { toast } from '../components/Toast';
-import { openSheet, closeSheet, push } from '../lib/nav';
+import { openSheet, closeSheet, push, dropSheet } from '../lib/nav';
 import { todayIso } from '../lib/dates';
 import type { Group, GroupAndTask, Member } from './types';
 
@@ -19,6 +19,24 @@ export interface JoinPreview { code: string; name: string; hostName: string; mem
 /** The current group's leaderboard, for the grouped Task screen. */
 export const board = signal<BoardState | null>(null);
 export const boardError = signal(false);
+
+// Slice A.1: members the caller has blocked (from GET /me/blocks), and the names
+// we saw when blocking so the Members sheet can offer Unblock for people the
+// board no longer lists.
+export const BLOCK_NAMES_KEY = 'tt.blocknames';
+export const blockedIds = signal<ReadonlySet<string>>(new Set());
+function readBlockNames(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(BLOCK_NAMES_KEY) || '{}') as Record<string, string>; } catch { return {}; }
+}
+export const blockedNames = signal<Record<string, string>>(readBlockNames());
+function saveBlockNames(): void {
+  try { localStorage.setItem(BLOCK_NAMES_KEY, JSON.stringify(blockedNames.value)); } catch { /* storage blocked */ }
+}
+export function resetBlocks(): void {
+  blockedIds.value = new Set();
+  blockedNames.value = {};
+}
+export const REPORT_MAX = 500;
 
 /** Preview of a pending invite, shown by the Welcome dialog or the Join sheet. */
 export const joinPreview = signal<JoinPreview | null>(null);
@@ -77,6 +95,7 @@ export async function joinPending(): Promise<void> {
     // `push` starts the new screen with no sheet open, closing the Join sheet
     // in the same history entry (closeSheet() first would race it: its
     // history.back() is asynchronous and can land after this push).
+    dropSheet();
     push({ name: 'task', taskId: res.task.id });
   } catch {
     toast('Could not join that group. Try again.');
@@ -94,7 +113,14 @@ export async function loadBoard(groupId: string): Promise<void> {
   const s = session.value;
   if (!s) return;
   try {
-    board.value = await api.board(s.token, groupId, todayIso());
+    const [b, bl] = await Promise.all([
+      api.board(s.token, groupId, todayIso()),
+      api.myBlocks(s.token).catch(() => null), // the board is still useful without it
+    ]);
+    if (bl) blockedIds.value = new Set(bl.userIds);
+    const blocked = blockedIds.value;
+    // The server already omits blocked members; filter again in case a block is newer than the board.
+    board.value = { ...b, members: b.members.filter((m) => m.isMe || !blocked.has(m.userId)) };
     boardError.value = false;
   } catch {
     boardError.value = true;
@@ -158,9 +184,74 @@ export async function shoutTo(groupId: string, userId: string): Promise<void> {
   try {
     await api.shout(s.token, groupId, userId);
   } catch (e) {
-    toast(e instanceof HttpError && e.status === 409 ? 'You already sent one today.' : 'Could not send that. Try again.');
+    toast(e instanceof HttpError && e.status === 409 ? 'You already sent one today.'
+      : e instanceof HttpError && e.status === 403 ? "You can't send a shoutout to this member."
+      : 'Could not send that. Try again.');
   }
   await loadBoard(groupId);
+}
+
+/** Members sheet: "Block". Hides the member at once, then confirms with the server and refreshes. */
+export async function blockMember(groupId: string, userId: string, name: string): Promise<boolean> {
+  const s = session.value;
+  if (!s) return false;
+  const b = board.value;
+  blockedIds.value = new Set([...blockedIds.value, userId]);
+  blockedNames.value = { ...blockedNames.value, [userId]: name };
+  saveBlockNames();
+  if (b) board.value = { ...b, members: b.members.filter((m) => m.userId !== userId) };
+  try {
+    await api.block(s.token, groupId, userId);
+    toast(`Blocked ${name}.`);
+    await loadBoard(groupId);
+    return true;
+  } catch {
+    const next = new Set(blockedIds.value);
+    next.delete(userId);
+    blockedIds.value = next;
+    const { [userId]: _gone, ...rest } = blockedNames.value;
+    blockedNames.value = rest;
+    saveBlockNames();
+    toast('Could not block that member. Try again.');
+    await loadBoard(groupId);
+    return false;
+  }
+}
+
+/** Members sheet: "Unblock". */
+export async function unblockMember(groupId: string, userId: string): Promise<boolean> {
+  const s = session.value;
+  if (!s) return false;
+  try {
+    await api.unblock(s.token, groupId, userId);
+    const next = new Set(blockedIds.value);
+    next.delete(userId);
+    blockedIds.value = next;
+    const { [userId]: _gone, ...rest } = blockedNames.value;
+    blockedNames.value = rest;
+    saveBlockNames();
+    toast('Unblocked.');
+    await loadBoard(groupId);
+    return true;
+  } catch {
+    toast('Could not unblock that member. Try again.');
+    return false;
+  }
+}
+
+/** Report sheet: "Send". Returns an error string for the form, or null on success. */
+export async function reportMember(groupId: string, userId: string, reason: string): Promise<string | null> {
+  const s = session.value;
+  if (!s) return 'Sign in to send a report.';
+  const r = reason.trim();
+  if (!r) return 'Say briefly what happened.';
+  if (r.length > REPORT_MAX) return `Keep it to ${REPORT_MAX} characters.`;
+  try {
+    await api.report(s.token, groupId, userId, r);
+    return null;
+  } catch {
+    return 'Could not send the report. Try again.';
+  }
 }
 
 /** Wires the re-check that runs right after a sign-in completes. Call once on load. */

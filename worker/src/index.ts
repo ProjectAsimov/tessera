@@ -4,8 +4,8 @@
 import { HttpError, json } from './lib/json';
 import { corsHeaders } from './middleware/cors';
 import { authCallback, authLogout, authStart } from './routes/auth';
-import { boardRoute, createGroupRoute, joinGroupRoute, leaveRoute, previewGroupRoute, removeRoute, shoutRoute } from './routes/groups';
-import { me } from './routes/me';
+import { blockRoute, boardRoute, createGroupRoute, joinGroupRoute, leaveRoute, previewGroupRoute, removeRoute, reportRoute, shoutRoute, unblockRoute } from './routes/groups';
+import { deleteMe, me, myBlocks } from './routes/me';
 import { sync } from './routes/sync';
 import type { Ctx, Env, Handler } from './types';
 
@@ -14,6 +14,8 @@ const routes: Record<string, Handler | undefined> = {
   'GET /auth/callback': authCallback,
   'POST /auth/logout': authLogout,
   'GET /me': me,
+  'DELETE /me': deleteMe,
+  'GET /me/blocks': myBlocks,
   'POST /sync': sync,
   'POST /groups': createGroupRoute,
   'GET /groups/preview': previewGroupRoute,
@@ -26,6 +28,9 @@ const groupIdRoutes: { method: string; suffix: string; handler: (ctx: Ctx, id: s
   { method: 'POST', suffix: '/leave', handler: leaveRoute },
   { method: 'POST', suffix: '/remove', handler: removeRoute },
   { method: 'POST', suffix: '/shout', handler: shoutRoute },
+  { method: 'POST', suffix: '/block', handler: blockRoute },
+  { method: 'POST', suffix: '/unblock', handler: unblockRoute },
+  { method: 'POST', suffix: '/report', handler: reportRoute },
 ];
 
 function matchGroupIdRoute(method: string, pathname: string): { handler: (ctx: Ctx, id: string) => Promise<Response>; id: string } | null {

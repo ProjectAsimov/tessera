@@ -1,5 +1,5 @@
 import {
-  clearTaskGroupStmt, codeTaken, deleteMembershipStmt, groupById, groupByCode, groupMemberTasks,
+  blockedBy, blockedEitherWay, deleteBlockStmt, insertBlockStmt, insertReport, clearTaskGroupStmt, codeTaken, deleteMembershipStmt, groupById, groupByCode, groupMemberTasks,
   insertGroup, insertMembership, insertShout, shoutedOn, shoutsReceived, insertMembershipStmt, membership, upsertUser, onDaysByTask, setTaskGroupStmt, taskById, upsertTask, userName,
 } from '../db/queries';
 import { HttpError } from '../lib/json';
@@ -107,10 +107,11 @@ export async function getBoard(env: Env, groupId: string, callerId: string, toda
   const caller = await membership(db, groupId, callerId);
   if (!caller) throw new HttpError(403, 'not a member');
 
-  const memberTasks = await groupMemberTasks(db, groupId);
+  const blocked = new Set(await blockedBy(db, callerId));
+  const memberTasks = (await groupMemberTasks(db, groupId)).filter((m) => !blocked.has(m.userId));
   const onDays = await onDaysByTask(db, memberTasks.map((m) => m.taskId));
 
-  const received = await shoutsReceived(db, groupId, addDays(today, -6));
+  const received = await shoutsReceived(db, groupId, addDays(today, -6), callerId);
   const sentToday = await shoutedOn(db, groupId, callerId, today);
   const mine = memberTasks.find((m) => m.userId === callerId);
   const mySet = new Set((mine ? onDays.get(mine.taskId) ?? [] : []).map((e) => e.day));
@@ -187,7 +188,35 @@ export async function shout(env: Env, groupId: string, callerId: string, targetI
   if (!(await membership(db, groupId, callerId))) throw new HttpError(403, 'not a member');
   if (targetId === callerId) throw new HttpError(400, 'cannot shout yourself');
   if (!(await membership(db, groupId, targetId))) throw new HttpError(404, 'target is not a member');
+  if (await blockedEitherWay(db, callerId, targetId)) throw new HttpError(403, 'blocked');
   if (!(await insertShout(db, groupId, callerId, targetId, today))) throw new HttpError(409, 'already today');
-  const count = (await shoutsReceived(db, groupId, addDays(today, -6))).get(targetId) ?? 0;
+  const count = (await shoutsReceived(db, groupId, addDays(today, -6), callerId)).get(targetId) ?? 0;
   return { ok: true, count };
+}
+
+export async function blockMember(env: Env, groupId: string, callerId: string, targetId: string): Promise<void> {
+  const db = env.DB;
+  if (!(await groupById(db, groupId))) throw new HttpError(404, 'group not found');
+  if (!(await membership(db, groupId, callerId))) throw new HttpError(403, 'not a member');
+  if (targetId === callerId) throw new HttpError(400, 'cannot block yourself');
+  if (!(await membership(db, groupId, targetId))) throw new HttpError(404, 'target is not a member');
+  await insertBlockStmt(db, callerId, targetId).run();
+}
+
+/** The target need not still be a member: a block outlives their membership and must stay removable. */
+export async function unblockMember(env: Env, groupId: string, callerId: string, targetId: string): Promise<void> {
+  const db = env.DB;
+  if (!(await groupById(db, groupId))) throw new HttpError(404, 'group not found');
+  if (!(await membership(db, groupId, callerId))) throw new HttpError(403, 'not a member');
+  if (targetId === callerId) throw new HttpError(400, 'cannot unblock yourself');
+  await deleteBlockStmt(db, callerId, targetId).run();
+}
+
+export async function reportMember(env: Env, groupId: string, callerId: string, targetId: string, reason: string): Promise<void> {
+  const db = env.DB;
+  if (!(await groupById(db, groupId))) throw new HttpError(404, 'group not found');
+  if (!(await membership(db, groupId, callerId))) throw new HttpError(403, 'not a member');
+  if (targetId === callerId) throw new HttpError(400, 'cannot report yourself');
+  if (!(await membership(db, groupId, targetId))) throw new HttpError(404, 'target is not a member');
+  await insertReport(db, groupId, callerId, targetId, reason);
 }

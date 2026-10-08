@@ -17,7 +17,7 @@ export function MilestoneOverlay() {
       <div class="ms-body">
         <div class="ms-num">{m.days}</div>
         <div class="ms-days">{m.days === 1 ? 'day' : 'days'}</div>
-        {m.gems > 0 && <div class="ms-gems">+{m.gems} {'\u{1F48E}'} gems</div>}
+        {m.gems > 0 && <div class="ms-gems">+{m.gems} <span class="tile-ico" aria-hidden="true" /> {m.gems === 1 ? 'tile' : 'tiles'}</div>}
         {m.freeze && <div class="ms-gems">+1 {'❄'} streak freeze</div>}
       </div>
     </div>

@@ -6,6 +6,7 @@ import { Leaderboard } from '../components/Leaderboard';
 import { Sheet } from '../components/Sheet';
 import { Icon } from '../components/Icon';
 import { toast } from '../components/Toast';
+import { Terms } from '../components/Terms';
 import { entries, taskById, updateTask, deleteTask, wallet } from '../model/store';
 import { toggleToday, bumpToday } from '../model/rewards';
 import { onDays, taskStats, yearsWithData, tier } from '../lib/stats';
@@ -13,7 +14,7 @@ import { todayIso, shortMonth } from '../lib/dates';
 import { taskVars } from '../lib/theme';
 import { back, push, openSheet, closeSheet, swapSheet, sheet, leaveTask } from '../lib/nav';
 import { lastSyncAt } from '../model/sync';
-import { board, boardError, loadBoard, clearBoard, shareTask, leaveCurrentGroup, removeGroupMember, inviteLink, shoutTo } from '../model/groups';
+import { board, boardError, loadBoard, clearBoard, shareTask, leaveCurrentGroup, removeGroupMember, inviteLink, shoutTo, blockedIds, blockedNames, blockMember, unblockMember, reportMember, REPORT_MAX } from '../model/groups';
 import './Task.css';
 
 export function TaskScreen({ taskId }: { taskId: string }) {
@@ -21,6 +22,10 @@ export function TaskScreen({ taskId }: { taskId: string }) {
   const [shareBusy, setShareBusy] = useState(false);
   const [shareCode, setShareCode] = useState<string | null>(null);
   const [copyNote, setCopyNote] = useState('');
+  const [reportFor, setReportFor] = useState<{ userId: string; name: string } | null>(null);
+  const [reportText, setReportText] = useState('');
+  const [reportErr, setReportErr] = useState('');
+  const [reportBusy, setReportBusy] = useState(false);
 
   useEffect(() => {
     if (task?.groupId) void loadBoard(task.groupId);
@@ -90,6 +95,29 @@ export function TaskScreen({ taskId }: { taskId: string }) {
     await removeGroupMember(task.groupId, userId);
   };
 
+  const onBlock = async (userId: string, name: string) => {
+    if (!task.groupId) return;
+    if (!confirm(`Block ${name}? They will disappear from your leaderboard and can't send you shoutouts. You can unblock them from Members.`)) return;
+    await blockMember(task.groupId, userId, name);
+  };
+
+  const onReport = (userId: string, name: string) => {
+    setReportFor({ userId, name });
+    setReportText('');
+    setReportErr('');
+    openSheet('report');
+  };
+
+  const sendReport = async () => {
+    if (!task.groupId || !reportFor || reportBusy) return;
+    setReportBusy(true);
+    const err = await reportMember(task.groupId, reportFor.userId, reportText);
+    setReportBusy(false);
+    if (err) { setReportErr(err); return; }
+    closeSheet();
+    toast("Thanks, we'll look into it.");
+  };
+
   const link = shareCode ? inviteLink(shareCode) : '';
   const canShareNative = typeof navigator !== 'undefined' && !!navigator.share;
 
@@ -101,8 +129,8 @@ export function TaskScreen({ taskId }: { taskId: string }) {
         <IconButton icon="dots" label="More" onClick={() => openSheet('menu')} />
       </header>
 
-      <button type="button" class="wallet-pill" onClick={() => openSheet('settings')} aria-label={`Wallet: ${w.gems} gems, ${w.freezes} streak freezes`}>
-        <span>{'💎'} {w.gems}</span>
+      <button type="button" class="wallet-pill" onClick={() => openSheet('settings')} aria-label={`Wallet: ${w.gems} tiles, ${w.freezes} streak freezes`}>
+        <span><span class="tile-ico" aria-hidden="true" /> {w.gems}</span>
         <span>{'❄'} {w.freezes}</span>
       </button>
 
@@ -190,19 +218,60 @@ export function TaskScreen({ taskId }: { taskId: string }) {
           )}
         </div>
         <div class="note">{copyNote}</div>
+        <Terms />
       </Sheet>
 
       <Sheet open={sheet.value === 'members'} onClose={closeSheet} title="Members" labelledBy="membersTitle">
-        <div class="menu">
+        <div class="member-list">
           {board.value?.members.map((m) => (
             <div class="member-row" key={m.userId}>
               <span class="member-name">
                 {m.name}
                 {m.isHost && <span class="gtag">host</span>}
+                {m.isMe && <span class="gtag">you</span>}
               </span>
-              {!m.isHost && <Button warn onClick={() => onRemove(m.userId, m.name)}>Remove</Button>}
+              {!m.isMe && (
+                <span class="member-actions">
+                  <Button onClick={() => onReport(m.userId, m.name)}>Report</Button>
+                  <Button onClick={() => onBlock(m.userId, m.name)}>Block</Button>
+                  {isHost && <Button warn onClick={() => onRemove(m.userId, m.name)}>Remove</Button>}
+                </span>
+              )}
             </div>
           ))}
+        </div>
+        {blockedIds.value.size > 0 && (
+          <>
+            <p class="sheet-label">Blocked</p>
+            <div class="member-list">
+              {Array.from(blockedIds.value).map((id) => (
+                <div class="member-row" key={id}>
+                  <span class="member-name">{blockedNames.value[id] ?? 'Blocked member'}</span>
+                  <span class="member-actions">
+                    <Button onClick={() => { if (task.groupId) void unblockMember(task.groupId, id); }}>Unblock</Button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </Sheet>
+
+      <Sheet open={sheet.value === 'report'} onClose={closeSheet} title={reportFor ? `Report ${reportFor.name}` : 'Report'} labelledBy="reportTitle" doneLabel="Cancel">
+        <p class="acct">Tell us what happened. We review every report.</p>
+        <textarea
+          class="field report-text"
+          rows={4}
+          value={reportText}
+          maxLength={REPORT_MAX}
+          placeholder="What is the problem?"
+          aria-label="Reason for the report"
+          onInput={(e) => { setReportText((e.currentTarget as HTMLTextAreaElement).value); setReportErr(''); }}
+        />
+        <div class={'report-count' + (reportText.length > REPORT_MAX ? ' over' : '')} aria-live="polite">{reportText.length} / {REPORT_MAX}</div>
+        {reportErr && <div class="note" role="alert">{reportErr}</div>}
+        <div class="row">
+          <Button primary disabled={reportBusy || !reportText.trim() || reportText.length > REPORT_MAX} onClick={() => { void sendReport(); }}>{reportBusy ? 'Sending…' : 'Send'}</Button>
         </div>
       </Sheet>
     </div>

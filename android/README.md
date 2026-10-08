@@ -104,3 +104,10 @@ keystore/alias/password are unchanged, so the signing fingerprint is the same.
 When regenerating the project before the `/tessera/` site is live, fetch the manifest/icons
 from the old `/tasktracker/` URLs in memory only, then make sure `app/build.gradle`
 (`webManifestUrl`) and `app/src/main/res/raw/web_app_manifest.json` say `/tessera/`.
+
+## Minimum SDK
+
+`minSdkVersion` is 24 (set in `twa-manifest.json` and mirrored in `app/build.gradle`).
+Play automatic protection rejects bundles with a minimum SDK below 24. If the project is
+regenerated, confirm `app/build.gradle` still says `minSdkVersion 24` and reapply the two
+`/tessera/` hand fixes described above.

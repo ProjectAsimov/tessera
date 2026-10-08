@@ -7,11 +7,12 @@
 //                    a repairable gap and a frozen day (Read), 230 gems + 1 freeze
 //   ?task=<name>     with ?screen=task|month: open that task instead of the first one
 //   ?group=1         share the first seeded task into a group (needs a session; two-row leaderboard)
+//   ?blockedby=<id>  mock member <id> (e.g. mock-sub-2) has blocked the caller: shouts to them get 403
 //   ?join=<code>     stash a pending join as if `#join=<code>` had been visited (e.g. mockjoin01)
 //   ?screen=task|month|settings|welcome   open that screen after boot (for screenshots)
 import { STATE_KEY, addTask, setDay, setCount, writeEntry, setWallet, tasks, entries, upsertServerTask } from '../model/store';
 import { iso, addDays } from '../lib/dates';
-import { MOCK_TOKEN, seedServerGym, mockApi, KNOWN_JOIN_CODE } from './mockApi';
+import { MOCK_TOKEN, seedServerGym, mockApi, KNOWN_JOIN_CODE, blockedByOthers } from './mockApi';
 import { PENDING_JOIN_KEY } from '../model/groups';
 import { push, openSheet } from '../lib/nav';
 
@@ -108,6 +109,7 @@ export async function applySeedParams(): Promise<void> {
       upsertServerTask(res.task);
     }
   }
+  if (p.get('blockedby')) blockedByOthers.add(p.get('blockedby')!);
   if (p.get('join')) {
     try { localStorage.setItem(PENDING_JOIN_KEY, p.get('join')!); } catch { /* storage blocked */ }
   }

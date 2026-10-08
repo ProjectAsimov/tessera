@@ -32,7 +32,7 @@ export function MonthScreen({ taskId, y, m }: { taskId: string; y: number; m: nu
     if (repairDay(taskId, repairDayKey)) {
       toast(`Repaired ${longDate(repairDayKey)}`);
       closeSheet();
-    } else toast('Not enough gems');
+    } else toast('Not enough tiles');
   };
   return (
     <div class="screen month" style={taskVars(task?.color ?? 'purple')}>
@@ -59,17 +59,17 @@ export function MonthScreen({ taskId, y, m }: { taskId: string; y: number; m: nu
       <Sheet open={sheet.value === 'repair'} onClose={closeSheet} title="Repair a day" labelledBy="repairTitle" doneLabel="Cancel">
         {repairDayKey && (
           <>
-            <p class="repair-q">Repair {longDate(repairDayKey)} for {REPAIR_COST} gems?</p>
+            <p class="repair-q">Repair {longDate(repairDayKey)} for {REPAIR_COST} tiles?</p>
             <p class="acct">
               This fills the missed day inside your streak. It keeps the streak going but does not add to your month, year or total counts.
             </p>
             <p class="acct">
               {canAfford
-                ? `You have \u{1F48E} ${gems} gems.`
-                : `You have \u{1F48E} ${gems} gems, and a repair costs ${REPAIR_COST}. Earn gems by reaching streak milestones: 7, 30, 100 and 365 days, or a new best streak.`}
+                ? <>You have <span class="tile-ico" aria-hidden="true" /> {gems} tiles.</>
+                : <>You have <span class="tile-ico" aria-hidden="true" /> {gems} tiles, and a repair costs {REPAIR_COST}. Earn tiles by reaching streak milestones: 7, 30, 100 and 365 days, or a new best streak.</>}
             </p>
             <div class="row">
-              <Button primary disabled={!canAfford} onClick={doRepair}>Repair for {REPAIR_COST} gems</Button>
+              <Button primary disabled={!canAfford} onClick={doRepair}>Repair for {REPAIR_COST} <span class="tile-ico" aria-hidden="true" /> tiles</Button>
             </div>
           </>
         )}

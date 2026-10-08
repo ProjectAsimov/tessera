@@ -324,3 +324,17 @@ export function eraseAll(): void {
   for (const t of tasks.value) pendingTasks.set(t.id, ++seq);
   commit();
 }
+
+/** Wipes all in-memory state without syncing anything (account deleted: there is nothing left to sync to). */
+export function resetLocal(): void {
+  batch(() => {
+    tasks.value = [];
+    entries.value = {};
+    wallet.value = emptyWallet();
+    legacyTaskId.value = undefined;
+  });
+  pendingTasks.clear();
+  pendingEntries.clear();
+  walletPendingSeq = 0;
+  try { localStorage.removeItem(STATE_KEY); } catch { /* storage blocked */ }
+}
