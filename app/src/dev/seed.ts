@@ -5,6 +5,8 @@
 //   ?signedin=1      pre-set a mock session
 //   ?seed=a          Slice A showcase: flame tiers, a multi-event task (Water 3/8), a 6-day streak (Meditate),
 //                    a repairable gap and a frozen day (Read), 230 gems + 1 freeze
+//   ?seed=b          Slice B showcase: Gym with a perfect month (last month, plus the weeks inside it) and two earlier
+//                    perfect weeks, a few random days, an older year for the picker; Read has a plain streak
 //   ?task=<name>     with ?screen=task|month: open that task instead of the first one
 //   ?group=1         share the first seeded task into a group (needs a session; two-row leaderboard)
 //   ?blockedby=<id>  mock member <id> (e.g. mock-sub-2) has blocked the caller: shouts to them get 403
@@ -92,6 +94,37 @@ export async function applySeedParams(): Promise<void> {
     const run = addTask('Run', 'green', 'run');
     for (let i = 0; i < 120; i++) writeEntry(run.id, day(i), true, 1, 0, stamp(i));
     setWallet({ gems: 230, freezes: 1 });
+  }
+  if (p.get('seed') === 'b') {
+    localStorage.removeItem(STATE_KEY);
+    localStorage.setItem('tt.welcomed', '1');
+    const today = new Date();
+    const stamp = (i: number) => Date.now() - i * 86400000;
+    const gym = addTask('Gym', 'purple', 'dumbbell');
+    const fillRange = (id: string, from: Date, n: number) => {
+      for (let i = 0; i < n; i++) { const d = addDays(from, i); writeEntry(id, iso(d), true, 1, 0, stamp(Math.round((today.getTime() - d.getTime()) / 86400000))); }
+    };
+    // Last calendar month: every day (a perfect month, which also holds its full weeks).
+    const lm = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    fillRange(gym.id, lm, new Date(lm.getFullYear(), lm.getMonth() + 1, 0).getDate());
+    // Two more perfect weeks (Sunday to Saturday) in the months before it, not adjacent.
+    const firstSun = (m: Date) => { const d = new Date(m); d.setDate(1 + ((7 - d.getDay()) % 7)); return d; };
+    const older = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+    fillRange(gym.id, firstSun(older), 7);
+    fillRange(gym.id, addDays(firstSun(older), 14), 7);
+    // Scattered days elsewhere, some of this month, never completing a week.
+    const r = rng(11);
+    for (let i = 1; i < 150; i++) {
+      const d = addDays(today, -i);
+      const k = iso(d);
+      if (!entries.value[gym.id]?.[k] && d.getFullYear() === today.getFullYear() && r() < 0.45) writeEntry(gym.id, k, true, 1, 0, stamp(i));
+    }
+    // An earlier year, so the picker has two options.
+    const prev = new Date(today.getFullYear() - 1, 2, 3);
+    for (let i = 0; i < 120; i++) if (r() < 0.6) writeEntry(gym.id, iso(addDays(prev, i)), true, 1, 0, stamp(400 + i));
+    const read = addTask('Read 20 pages', 'teal', 'book');
+    for (let i = 1; i <= 4; i++) writeEntry(read.id, iso(addDays(today, -i)), true, 1, 0, stamp(i));
+    setWallet({ gems: 120, freezes: 1 });
   }
   if (p.get('group') === '1') {
     if (!localStorage.getItem('tt.session')) {

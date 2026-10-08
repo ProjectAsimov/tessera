@@ -5,6 +5,8 @@
 .ms-num { font-size: 112px; font-weight: 800; line-height: 1; letter-spacing: -0.04em; color: var(--lit); text-shadow: 0 0 40px var(--lit-soft); font-variant-numeric: tabular-nums; }
 .ms-days { font-size: 22px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.9; }
 .ms-gems { margin-top: 10px; font-size: 17px; font-weight: 700; padding: 8px 16px; border-radius: 999px; background: rgba(255, 255, 255, 0.14); }
+.ms-sym { font-size: 96px; line-height: 1; color: var(--lit); text-shadow: 0 0 40px var(--lit-soft); }
+.ms-title { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; margin-top: 4px; }
 @keyframes ms-in { from { opacity: 0; } }
 @keyframes ms-out { to { opacity: 0; } }
 @keyframes ms-pop { from { transform: scale(0.6); opacity: 0; } }

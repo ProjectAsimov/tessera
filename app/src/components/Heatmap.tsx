@@ -1,4 +1,4 @@
-import { iso, addDays, MONTHS, shortMonth, todayIso } from '../lib/dates';
+import { iso, addDays, pad, MONTHS, shortMonth, todayIso } from '../lib/dates';
 import { countMonth, countYear, countedDays, fillOf, type DayMap } from '../lib/stats';
 import { Card } from './Card';
 import './Heatmap.css';
@@ -11,10 +11,12 @@ interface Props {
   /** Events per day; squares fill by n/target for multi-event tasks. */
   target: number;
   onOpenMonth: (y: number, m: number) => void;
+  /** Perfect months as `YYYY-MM`; their label pills get a filled style. */
+  perfect?: ReadonlySet<string>;
 }
 
 /** One year, every day as a read-only square, weeks as columns, wrapped into two rows. */
-export function Heatmap({ year: y, entries, target, onOpenMonth }: Props) {
+export function Heatmap({ year: y, entries, target, onOpenMonth, perfect }: Props) {
   const days = countedDays(entries); // freeze / repair days keep a streak but do not count here
   const t = todayIso();
   const now = new Date();
@@ -41,8 +43,9 @@ export function Heatmap({ year: y, entries, target, onOpenMonth }: Props) {
           type="button"
           key={m}
           style={style}
+          class={perfect?.has(y + '-' + pad(m + 1)) ? 'perfect' : undefined}
           disabled={!canOpen(m)}
-          aria-label={`Open ${MONTHS[m]} ${y}, ${countMonth(days, y, m)} days`}
+          aria-label={`Open ${MONTHS[m]} ${y}, ${countMonth(days, y, m)} days${perfect?.has(y + '-' + pad(m + 1)) ? ', perfect month' : ''}`}
           onClick={() => onOpenMonth(y, m)}
         >
           {shortMonth(m)}

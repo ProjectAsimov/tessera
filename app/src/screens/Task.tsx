@@ -10,7 +10,9 @@ import { Terms } from '../components/Terms';
 import { entries, taskById, updateTask, deleteTask, wallet } from '../model/store';
 import { toggleToday, bumpToday } from '../model/rewards';
 import { onDays, taskStats, yearsWithData, tier } from '../lib/stats';
-import { todayIso, shortMonth } from '../lib/dates';
+import { todayIso, shortMonth, monthName, parseDay } from '../lib/dates';
+import { perfectWeeks, perfectMonths } from '../lib/badges';
+import { YearReview } from '../components/YearReview';
 import { taskVars } from '../lib/theme';
 import { back, push, openSheet, closeSheet, swapSheet, sheet, leaveTask } from '../lib/nav';
 import { lastSyncAt } from '../model/sync';
@@ -50,6 +52,16 @@ export function TaskScreen({ taskId }: { taskId: string }) {
   const nToday = map?.[today]?.n ?? 0;
   const flame = tier(st.streak);
   const w = wallet.value;
+  const pWeeks = perfectWeeks(map, today);
+  const pMonths = perfectMonths(map, today);
+  const pMonthSet = new Set(pMonths);
+  const years = yearsWithData(map);
+  const decemberLate = new Date().getMonth() === 11 && new Date().getDate() >= 15;
+  const weekLabel = (s: string) => {
+    const d = parseDay(s);
+    return `Week of ${shortMonth(d.getMonth())} ${d.getDate()}${d.getFullYear() === st.year ? '' : ', ' + d.getFullYear()}`;
+  };
+  const monthLabel = (m: string) => `${monthName(+m.slice(5, 7) - 1)} ${m.slice(0, 4)}`;
   const isHost = board.value?.members.find((m) => m.isMe)?.isHost ?? false;
 
   const pop = () => {
@@ -156,6 +168,21 @@ export function TaskScreen({ taskId }: { taskId: string }) {
         <StatTile value={st.thisYear} label={`in ${st.year}`} sub={`${st.total} all time`} />
       </StatRow>
 
+      {(pWeeks.length > 0 || pMonths.length > 0) && (
+        <div class="badges" aria-label="Badges">
+          {pWeeks.length > 0 && (
+            <button type="button" class="badge-pill" onClick={() => openSheet('weeks')}>
+              <span aria-hidden="true">{'\u2726'}</span> {pWeeks.length} perfect {pWeeks.length === 1 ? 'week' : 'weeks'}
+            </button>
+          )}
+          {pMonths.length > 0 && (
+            <button type="button" class="badge-pill" onClick={() => openSheet('months')}>
+              <span aria-hidden="true">{'\u25C6'}</span> {pMonths.length} perfect {pMonths.length === 1 ? 'month' : 'months'}
+            </button>
+          )}
+        </div>
+      )}
+
       {task.groupId && board.value && (
         <Leaderboard
           group={board.value.group}
@@ -169,16 +196,18 @@ export function TaskScreen({ taskId }: { taskId: string }) {
       )}
       {task.groupId && !board.value && boardError.value && <p class="hint">Couldn't load leaderboard.</p>}
 
-      {yearsWithData(map).map((y) => (
-        <Heatmap key={y} year={y} entries={map} target={task.target} onOpenMonth={(yy, m) => push({ name: 'month', taskId, y: yy, m })} />
+      {years.map((y) => (
+        <Heatmap key={y} year={y} entries={map} target={task.target} perfect={pMonthSet} onOpenMonth={(yy, m) => push({ name: 'month', taskId, y: yy, m })} />
       ))}
       <p class="home-hint">Tap the grid to open a month and edit past days.</p>
 
       <Sheet open={sheet.value === 'menu'} onClose={closeSheet} title={task.name} labelledBy="menuTitle">
         <div class="menu">
+          {decemberLate && <button type="button" onClick={() => { swapSheet('review'); }}>Year in review</button>}
           {!task.groupId && (
             <button type="button" onClick={onShare} disabled={shareBusy}>{shareBusy ? 'Creating group…' : 'Share'}</button>
           )}
+          {!decemberLate && <button type="button" onClick={() => { swapSheet('review'); }}>Year in review</button>}
           <button type="button" onClick={() => swapSheet('edit')}>Rename</button>
           <button type="button" onClick={() => swapSheet('edit')}>Change color or icon</button>
           <button type="button" onClick={() => {
@@ -193,6 +222,22 @@ export function TaskScreen({ taskId }: { taskId: string }) {
           }}>Delete</button>
         </div>
       </Sheet>
+
+      <Sheet open={sheet.value === 'weeks'} onClose={closeSheet} title="Perfect weeks" labelledBy="weeksTitle">
+        <p class="acct">All seven days, Sunday to Saturday, marked for real. Frozen and repaired days don't count. {'\u002B'}10 tiles each.</p>
+        <div class="badge-list">
+          {pWeeks.slice().reverse().map((s) => <div class="badge-row" key={s}><span aria-hidden="true">{'\u2726'}</span>{weekLabel(s)}</div>)}
+        </div>
+      </Sheet>
+
+      <Sheet open={sheet.value === 'months'} onClose={closeSheet} title="Perfect months" labelledBy="monthsTitle">
+        <p class="acct">Every day of the month marked for real. {'\u002B'}50 tiles each.</p>
+        <div class="badge-list">
+          {pMonths.slice().reverse().map((m) => <div class="badge-row" key={m}><span aria-hidden="true">{'\u25C6'}</span>{monthLabel(m)}</div>)}
+        </div>
+      </Sheet>
+
+      <YearReview open={sheet.value === 'review'} task={task} entries={map} years={years} />
 
       <Sheet open={sheet.value === 'share'} onClose={closeSheet} title="Invite" labelledBy="shareTitle">
         <p class="acct">Anyone with this link can join and get their own "{task.name}" to track, right beside yours on the leaderboard.</p>

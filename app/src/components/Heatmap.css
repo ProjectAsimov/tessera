@@ -5,6 +5,7 @@
 .hm { position: relative; height: 24px; margin-bottom: 6px; }
 /* Month labels look like the app's small buttons so it's clear they open the month. */
 .hm button { position: absolute; top: 0; padding: 3px 7px; border: 1px solid var(--cell); border-radius: 999px; background: var(--panel); color: var(--muted); font-size: 10.5px; font-weight: 500; line-height: 1.2; cursor: pointer; font-family: inherit; white-space: nowrap; }
+.hm button.perfect { background: var(--lit-soft); border-color: var(--lit); color: var(--text); font-weight: 700; }
 .hm button:disabled { cursor: default; opacity: 0.4; background: transparent; }
 .hg { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, auto); gap: 3px; margin-bottom: 12px; cursor: pointer; }
 .hg:last-child { margin-bottom: 0; }

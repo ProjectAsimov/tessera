@@ -15,8 +15,17 @@ export function MilestoneOverlay() {
   return (
     <div class="ms" key={m.id} style={taskVars(m.color)} role="status" aria-live="assertive" onClick={dismissMilestone}>
       <div class="ms-body">
-        <div class="ms-num">{m.days}</div>
-        <div class="ms-days">{m.days === 1 ? 'day' : 'days'}</div>
+        {m.badge ? (
+          <>
+            <div class="ms-sym" aria-hidden="true">{m.badge === 'week' ? '✦' : '◆'}</div>
+            <div class="ms-title">Perfect {m.badge}</div>
+          </>
+        ) : (
+          <>
+            <div class="ms-num">{m.days}</div>
+            <div class="ms-days">{m.days === 1 ? 'day' : 'days'}</div>
+          </>
+        )}
         {m.gems > 0 && <div class="ms-gems">+{m.gems} <span class="tile-ico" aria-hidden="true" /> {m.gems === 1 ? 'tile' : 'tiles'}</div>}
         {m.freeze && <div class="ms-gems">+1 {'❄'} streak freeze</div>}
       </div>

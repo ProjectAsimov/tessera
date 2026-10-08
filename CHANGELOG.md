@@ -4,6 +4,18 @@ Web releases are dated (the PWA updates itself on next open). Android builds
 carry a version; the Android shell only wraps the web app, so most releases
 need no new bundle.
 
+## 2026-10-08 — Badges and year in review
+
+- Perfect week (all seven days, Sunday to Saturday) and perfect month badges,
+  per task. Each earns tiles (10 / 50) and plays a celebration; a task screen
+  row shows your counts, and tapping it lists the dates. Days covered by a
+  freeze or repair don't make a perfect week.
+- Perfect months get a filled label on the year grid.
+- Year in review: from a task's … menu, a shareable 1080×1920 image of the year
+  grid with days done, best streak and badges. Share straight to any app, or
+  save the PNG. Moves to the top of the menu from 15 December.
+- Existing history counts: badges you already earned are awarded on first open.
+
 ## 2026-10-07 (b) — Accounts, safety, tiles
 
 - Delete your account from Settings → Account. It removes your tasks, days,
